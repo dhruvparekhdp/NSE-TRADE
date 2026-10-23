@@ -16,7 +16,7 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 | V0-5 | done | c25b0d3 | scripts use settings.data_dir |
 | V0-6 | done | 31a5227 | Test Angel read-only button + API |
 | V0-7 | done | 31a5227 | smartapi-python 1.5.5 + real IP/MAC headers |
-| V0-8 | done | pending | keys mask / compare / reveal / history |
+| V0-8 | done | ab5f708 | keys mask / compare / reveal / history |
 
 ## V1 — market (`feat/v1-market`)
 
