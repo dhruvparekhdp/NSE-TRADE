@@ -21,8 +21,7 @@ def test_daily_bar_not_visible_at_1400_same_day():
     open_ms = int(datetime(2026, 10, 23, 9, 15, tzinfo=IST).timestamp() * 1000)
     at_1400 = int(datetime(2026, 10, 23, 14, 0, tzinfo=IST).timestamp() * 1000)
     view = BarView(bars=[_daily(open_ms)], decision_ms=at_1400, timeframe="1d")
-    with pytest.raises(LookaheadError):
-        view.closed()
+    assert view.closed() == []
 
 
 def test_daily_bar_visible_after_session():

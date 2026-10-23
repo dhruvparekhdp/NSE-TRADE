@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from core.sessions import daily_bar_close_ms
 from core.types import Bar, Book, Signal
 
 
@@ -14,10 +15,10 @@ class LookaheadError(Exception):
 
 
 def _timeframe_ms(timeframe: str) -> int:
-    """Bar length in ms. Daily uses session close, not +60s (PLAN_V2 V2-3 / B13)."""
+    """Bar length in ms. Daily close is per-bar via sessions.json (R12)."""
     tf = (timeframe or "1m").lower()
     if tf in {"1d", "d", "day", "daily"}:
-        return 6 * 3600 * 1000  # 09:15→~15:15 continuous; caller may pass session end
+        return 0  # unused for daily; see daily_bar_close_ms
     if tf.endswith("m"):
         return int(tf[:-1] or "1") * 60_000
     if tf.endswith("h"):
@@ -27,23 +28,25 @@ def _timeframe_ms(timeframe: str) -> int:
 
 @dataclass
 class BarView:
-    """Only exposes bars that have closed by decision_ms (PLAN_V2 V2-3)."""
+    """Only exposes bars that have closed by decision_ms (PLAN_V2 V2-3 / R12)."""
 
     bars: list[Bar]
     decision_ms: int
     timeframe: str = "1m"
+    asset_class: str = "fo"
 
     def closed(self) -> list[Bar]:
         width = _timeframe_ms(self.timeframe)
         daily = self.timeframe.lower() in {"1d", "d", "day", "daily"}
         out: list[Bar] = []
         for b in self.bars:
-            close_ms = b.ts_ms + width
+            close_ms = (
+                daily_bar_close_ms(b.ts_ms, self.asset_class)
+                if daily
+                else b.ts_ms + width
+            )
             if close_ms > self.decision_ms:
-                # Daily: asking while the session is still open is a lookahead error (V2-3)
-                if daily and b.ts_ms <= self.decision_ms:
-                    raise LookaheadError(f"daily bar {b.ts_ms} not closed at {self.decision_ms}")
-                continue
+                continue  # forming bar — exclude, do not crash live callers (R12)
             out.append(b)
         return out
 
