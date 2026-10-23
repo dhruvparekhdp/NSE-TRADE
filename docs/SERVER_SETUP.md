@@ -11,3 +11,17 @@ Owner runs or approves each step. Do not paste secrets into chat or git.
 7. **Angel SmartAPI app** — static IP = Elastic IP; TOTP enabled (plan A3).
 
 Working directory in the unit file is `/home/ubuntu/nse-engine`. If the clone path differs, edit the unit before enabling.
+
+## Nginx reverse proxy (portal HTTPS gate — review R3)
+
+App binds `127.0.0.1:8090`. Set `TRUSTED_PROXY=true` in server `.env` so the portal trusts
+proxy headers **only** from that loopback peer. Nginx must forward real client IP and scheme:
+
+```nginx
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+Without `X-Forwarded-Proto: https`, `/api/keys/*` returns 403. Do not set `TRUSTED_PROXY`
+when clients talk to the app directly (local pytest / Tailscale serve without nginx).

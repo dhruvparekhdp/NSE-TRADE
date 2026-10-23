@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     web_host: str = "127.0.0.1"
     web_port: int = 8090
     cookie_secure: bool = True  # false only for local plain-HTTP dev / pytest
+    # Trust X-Forwarded-Proto / X-Real-IP only when TCP peer is loopback (review R3).
+    # Production behind same-host nginx MUST set TRUSTED_PROXY=true.
+    trusted_proxy: bool = False
     data_dir: Path = Path("./var")  # runtime only; Python package `data/` is separate
     database_url: str | None = None  # postgres nse_engine — keys live here
     admin_password: SecretStr | None = None  # bootstrap login; prefer PORTAL_ADMIN_HASH
