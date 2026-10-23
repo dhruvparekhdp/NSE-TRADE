@@ -71,7 +71,7 @@ def test_angel_live_guard_and_rate_limit():
 
     broker = AngelBroker(api=Fake(), sleep=lambda _s: None)
     with pytest.raises(Rejected):
-        broker.place_order({"tradingsymbol": "SBIN-EQ"})
+        broker.place_order_raw({"tradingsymbol": "SBIN-EQ"})
 
     with pytest.raises(RateLimited):
         broker.candles({})
