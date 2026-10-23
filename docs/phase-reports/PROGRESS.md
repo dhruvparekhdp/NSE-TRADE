@@ -35,12 +35,12 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V1b-1 | done | 07c787e | global_cues + flows |
-| V1b-2 | done | 07c787e | preopen snapshots |
-| V1b-3 | done | 07c787e | headlines fetch/tag/score |
-| V1b-4 | done | 07c787e | morning brief + opening type + risk-off |
-| V1b-5 | done | 07c787e | /api/opening|/sentiment|/headlines |
-| V1b-6 | done | 07c787e | opening features on signals |
+| V1b-1 | done | 07224e3 | global_cues + flows |
+| V1b-2 | done | 07224e3 | preopen snapshots |
+| V1b-3 | done | 07224e3 | headlines fetch/tag/score |
+| V1b-4 | done | 07224e3 | morning brief + opening type + risk-off |
+| V1b-5 | done | 07224e3 | /api/opening|/sentiment|/headlines |
+| V1b-6 | done | 07224e3 | opening features on signals |
 
 ## V2 — lab fixes (`feat/v2-lab-fixes`)
 
