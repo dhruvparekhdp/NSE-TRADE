@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.exits import ExitRules, fill_entry, step_exits, virtual_outcome
+from core.exits import ExitRules, fill_entry, virtual_outcome
 from core.types import Bar, Signal
 
 log = logging.getLogger(__name__)
