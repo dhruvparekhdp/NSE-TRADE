@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from config.settings import get_settings
+from core.session_times import derive_engine_times
 from data.calendar import CalendarMissing, job_should_run, load_default_calendar
 from engine.state import init_db
 from notify.telegram import TelegramClient
@@ -262,16 +263,23 @@ class EngineRunner:
         except Exception as exc:  # noqa: BLE001
             log.warning("free quotes job failed: %s", exc)
 
+    def _hhmm_cron(self, hhmm: str) -> str:
+        h, m = hhmm.split(":")
+        return f"{int(m)} {int(h)} * * mon-fri"
+
     def _schedule(self) -> None:
-        # R9 will switch square-off / no-entry from fixed crons to session_times.
+        # R9: square-off / no-entry from core.session_times (defaults 14:55 / 14:35).
+        sq_at, no_entry = derive_engine_times(self.settings.broker_squareoff_at)
+        sq_at = getattr(self.settings, "square_off_at", None) or sq_at
+        no_entry = getattr(self.settings, "no_entry_after", None) or no_entry
         jobs: list[tuple[str, object, str]] = [
             ("30 8 * * mon-fri", self.job_refresh_instruments, "refresh_instruments"),
             ("45 8 * * mon-fri", self.job_login, "login"),
             ("45 8 * * mon-fri", self.job_morning_brief, "morning_brief"),
             ("0 9 * * mon-fri", self.job_start_feed, "start_feed"),
             ("0 9 * * mon-fri", self.job_pending, "pending"),
-            ("45 14 * * mon-fri", self.job_no_new_entries, "no_new_entries"),
-            ("5 15 * * mon-fri", self.job_square_off, "square_off"),
+            (self._hhmm_cron(no_entry), self.job_no_new_entries, "no_new_entries"),
+            (self._hhmm_cron(sq_at), self.job_square_off, "square_off"),
             ("35 15 * * mon-fri", self.job_stop_feed, "stop_feed"),
             ("45 15 * * mon-fri", self.job_open_type, "open_type"),
             ("15 16 * * mon-fri", self.job_eod_fill, "eod_fill"),
@@ -287,7 +295,6 @@ class EngineRunner:
             ("*/5 9-15 * * mon-fri", self.job_free_quotes, "free_quotes"),
             ("*/5 9-15 * * mon-fri", self.job_book_a_shadow, "book_a_shadow"),
             ("*/5 9-14 * * mon-fri", self.job_opening_scorecard, "opening_scorecard"),
-            # Pre-open every minute 09:00–09:14 (final flagged near 09:15)
             ("*/1 9 * * mon-fri", self.job_preopen, "preopen"),
         ]
         for cron, fn, name in jobs:

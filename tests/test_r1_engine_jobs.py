@@ -134,7 +134,16 @@ def test_runner_registers_r1_jobs():
     r = EngineRunner.__new__(EngineRunner)
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-    r.settings = type("S", (), {"broker_squareoff_at": "15:10", "strategies_enabled": []})()
+    r.settings = type(
+        "S",
+        (),
+        {
+            "broker_squareoff_at": "15:10",
+            "square_off_at": "14:55",
+            "no_entry_after": "14:35",
+            "strategies_enabled": [],
+        },
+    )()
     r.scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
     r._schedule()
     ids = {j.id for j in r.scheduler.get_jobs()}
