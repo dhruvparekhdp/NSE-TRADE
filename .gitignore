@@ -8,6 +8,7 @@ __pycache__/
 .coverage
 htmlcov/
 var/
+logs/
 data/lake/
 data/news/
 data/llm_calls/

@@ -20,9 +20,58 @@ class CandleClient(Protocol):
     ) -> list[list[Any]]: ...
 
 
-def parse_bhavcopy_csv(text: str) -> pd.DataFrame:
-    """Parse classic NSE bhavcopy CSV (SYMBOL, OPEN, HIGH, LOW, CLOSE, TOTTRDQTY, TIMESTAMP)."""
+def _is_udiff(fieldnames: list[str] | None) -> bool:
+    if not fieldnames:
+        return False
+    upper = {f.upper() for f in fieldnames}
+    return "TCKRSYMB" in upper or "TRADDT" in upper
+
+
+def parse_bhavcopy_udiff(text: str) -> pd.DataFrame:
+    """NSE UDiFF daily bhav (Jul 2024+) — TckrSymb, TradDt, OpnPric, HghPric, LwPric, ClsPric, TotTradgVol."""
     reader = csv.DictReader(io.StringIO(text))
+    rows = []
+    for row in reader:
+        lower_map = {rk.lower(): (rv or "").strip() for rk, rv in row.items()}
+
+        def g(*keys: str, _m: dict[str, str] = lower_map) -> str:
+            for k in keys:
+                if k.lower() in _m:
+                    return _m[k.lower()]
+            return ""
+
+        series = g("SctySrs", "SERIES", "Series").upper() or "EQ"
+        if series != "EQ":
+            continue
+        sym = g("TckrSymb", "SYMBOL", "Symbol").upper()
+        if not sym:
+            continue
+        d = _parse_bhav_date(g("TradDt", "TIMESTAMP", "DATE1", "Date"))
+        rows.append(
+            {
+                "symbol": sym,
+                "date": int(d.strftime("%Y%m%d")),
+                "open": float(g("OpnPric", "OPEN", "Open") or 0),
+                "high": float(g("HghPric", "HIGH", "High") or 0),
+                "low": float(g("LwPric", "LOW", "Low") or 0),
+                "close": float(g("ClsPric", "CLOSE", "Close") or 0),
+                "volume": int(float(g("TotTradgVol", "TOTTRDQTY", "TTL_TRD_QNTY", "Volume") or 0)),
+                "delivery_qty": int(float(g("DlvryQty", "DELIV_QTY") or 0) or 0),
+                "source": "bhav_udiff",
+                "adj_factor": 1.0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def parse_bhavcopy_csv(text: str) -> pd.DataFrame:
+    """Auto-detect UDiFF vs classic NSE bhavcopy CSV."""
+    sample = io.StringIO(text)
+    reader = csv.DictReader(sample)
+    if _is_udiff(reader.fieldnames):
+        return parse_bhavcopy_udiff(text)
+    sample.seek(0)
+    reader = csv.DictReader(sample)
     rows = []
     for row in reader:
         sym = (row.get("SYMBOL") or row.get("Symbol") or "").strip().upper()
@@ -32,7 +81,6 @@ def parse_bhavcopy_csv(text: str) -> pd.DataFrame:
         if not sym:
             continue
         ts = row.get("TIMESTAMP") or row.get("DATE1") or row.get("Date") or ""
-        # formats: 23-OCT-2025 or 23-Oct-2025 or 2025-10-23
         d = _parse_bhav_date(ts)
         rows.append(
             {
@@ -45,6 +93,7 @@ def parse_bhavcopy_csv(text: str) -> pd.DataFrame:
                 "volume": int(float(row.get("TOTTRDQTY") or row.get("TTL_TRD_QNTY") or row.get("Volume") or 0)),
                 "delivery_qty": int(float(row.get("DELIV_QTY") or 0) or 0),
                 "source": "bhav",
+                "adj_factor": 1.0,
             }
         )
     return pd.DataFrame(rows)

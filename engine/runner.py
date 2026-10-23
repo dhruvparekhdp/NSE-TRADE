@@ -5,13 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from config.settings import get_settings
+from data.calendar import CalendarMissing, job_should_run, load_default_calendar
 from engine.state import init_db
 from notify.telegram import TelegramClient
 from web.app import create_app
@@ -31,28 +34,60 @@ class EngineRunner:
         self._runner: web.AppRunner | None = None
         self._stopping = asyncio.Event()
 
+    def _trading_day_ok(self, *, allow_special_entries: bool = True) -> bool:
+        """Skip holiday / weekend / missing-year jobs (PLAN_V2 V1-2)."""
+        if not job_should_run():
+            log.info("skip job: not a trading day (or calendar missing)")
+            return False
+        if not allow_special_entries and not self.settings.trade_special_sessions:
+            today = datetime.now(ZoneInfo(IST)).date()
+            try:
+                cal = load_default_calendar()
+                if cal.special_session(today) is not None:
+                    log.info("skip new-entry job: special session (Muhurat)")
+                    return False
+            except CalendarMissing:
+                return False
+        return True
+
     async def job_refresh_instruments(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: refresh instruments (08:30 IST)")
 
     async def job_login(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: login (08:45 IST)")
 
     async def job_start_feed(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: start websocket (09:00 IST)")
 
     async def job_no_new_entries(self) -> None:
+        if not self._trading_day_ok(allow_special_entries=False):
+            return
         log.info("stub job: no new Book A entries (14:45 IST)")
 
     async def job_square_off(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: square off MIS (15:05 IST)")
 
     async def job_stop_feed(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: stop websocket (15:35 IST)")
 
     async def job_eod(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: end-of-day summary (15:45 IST)")
 
     async def job_backfill(self) -> None:
+        if not self._trading_day_ok():
+            return
         log.info("stub job: history backfill (18:00 IST)")
 
     async def job_backup(self) -> None:
@@ -60,6 +95,8 @@ class EngineRunner:
 
     async def job_news(self) -> None:
         """Pull India RSS when network allowed; score via HF Space / rules (SHARED_INFRA)."""
+        if not self._trading_day_ok():
+            return
         log.info("news job: start")
         try:
             from news.pipeline import refresh_and_score
@@ -79,6 +116,8 @@ class EngineRunner:
 
     async def job_free_quotes(self) -> None:
         """Poll yfinance (free, delayed). Angel WS stays off until live orders."""
+        if not self._trading_day_ok():
+            return
         log.info("free quotes job: start")
         try:
             from data.free_quotes import refresh_default_universe

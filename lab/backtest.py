@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from broker.paper import PaperBroker
 from core.costs import cost_in_r, rates_for, round_trip
 from core.risk import PortfolioState, RiskLimits, can_open, size
 from core.types import Bar, Signal
+from data.universe import universe_on
 from strategies.base import BarView, Context, Strategy, mirror, random_baseline
+
+
+def symbols_tradable_on(d: date, candidates: list[str] | None = None) -> list[str]:
+    """Filter candidates by survivorship history (PLAN_V2 V1-6)."""
+    allowed = universe_on(d)
+    if candidates is None:
+        return sorted(allowed)
+    return [s for s in candidates if s.upper() in allowed]
 
 
 @dataclass

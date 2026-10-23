@@ -23,7 +23,8 @@ def test_delivery_example_approx():
 
 def test_brokerage_min_flat_vs_pct():
     rates = rates_for("MIS")
-    assert order_brokerage(1_000, rates) == 1.0  # 0.1% of 1000
+    assert order_brokerage(1_000, rates) == 5.0  # max(₹5, 0.1% of 1000)
+    assert order_brokerage(3_000, rates) == 5.0
     assert order_brokerage(100_000, rates) == 20.0
 
 

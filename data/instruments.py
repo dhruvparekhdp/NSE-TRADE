@@ -44,8 +44,25 @@ def parse_nifty100_csv(text: str) -> list[str]:
     return syms
 
 
+def _fo_underlyings(rows: list[dict[str, Any]]) -> set[str]:
+    """Symbols that have at least one NFO futures row (PLAN_V2 V1-5)."""
+    out: set[str] = set()
+    for r in rows:
+        if str(r.get("exch_seg", "")).upper() != "NFO":
+            continue
+        # Angel: name is underlying; instrumenttype FUTSTK / FUTIDX
+        itype = str(r.get("instrumenttype") or r.get("instrument_type") or "").upper()
+        if itype and not itype.startswith("FUT"):
+            continue
+        name = str(r.get("name") or "").strip().upper()
+        if name:
+            out.add(name)
+    return out
+
+
 def parse_scrip_master(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Filter NSE -EQ rows into symbol -> token/tick map. tick_size in paise → rupees."""
+    fo = _fo_underlyings(rows)
     out: dict[str, dict[str, Any]] = {}
     for r in rows:
         if str(r.get("exch_seg", "")).upper() != "NSE":
@@ -62,6 +79,7 @@ def parse_scrip_master(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "name": str(r.get("name") or name),
             "tick_size": tick_paise / 100.0 if tick_paise >= 1 else tick_paise,
             "lot_size": int(r.get("lotsize") or 1),
+            "is_fo": name in fo,
         }
     return out
 
@@ -78,7 +96,7 @@ def build_universe(
         if row is None:
             missing.append(s)
             continue
-        mapped.append({**row, "in_universe": 1})
+        mapped.append({**row, "in_universe": 1, "is_fo": bool(row.get("is_fo", False))})
     return mapped, missing
 
 

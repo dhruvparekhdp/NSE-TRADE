@@ -1,0 +1,7 @@
+date,symbol,action
+2015-01-01,RELIANCE,add
+2015-01-01,TCS,add
+2015-01-01,SBIN,add
+2015-01-01,OLDCO,add
+2020-06-15,OLDCO,remove
+2021-03-31,NEWNIFTY,add

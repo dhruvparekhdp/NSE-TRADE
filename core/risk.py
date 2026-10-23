@@ -12,6 +12,7 @@ from core.types import Book, Signal, SizeResult
 class RiskLimits:
     risk_per_trade_pct: float = 1.0
     min_position_inr: float = 100_000.0
+    min_position_cnc_inr: float = 20_000.0
     max_position_pct_capital: float = 300.0
     max_mis_exposure_x: float = 3.0
     max_open_intraday: int = 3
@@ -23,6 +24,7 @@ class RiskLimits:
     kill_switch: bool = False
     news_filter_enabled: bool = False
     news_block_threshold: float = -0.5  # block new entries when sentiment <= this
+    surveillance_symbols: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -77,20 +79,33 @@ def size(
             if value < limits.min_position_inr:
                 return SizeResult(0, 0.0, "below_min_position")
     else:
+        if value < limits.min_position_cnc_inr and qty > 0:
+            return SizeResult(0, 0.0, "below_min_cnc_position")
         slot = capital / max(1, limits.max_open_swing)
         if value > slot and entry > 0:
             qty = _floor_qty(slot / entry)
             value = qty * entry
+            if value < limits.min_position_cnc_inr:
+                return SizeResult(0, 0.0, "below_min_cnc_position")
     if qty <= 0:
         return SizeResult(0, 0.0, "qty_zero")
     return SizeResult(qty, value, "ok")
 
 
-def can_open(state: PortfolioState, plan: Signal, limits: RiskLimits, now_ms: int) -> tuple[bool, str]:
+def can_open(
+    state: PortfolioState,
+    plan: Signal,
+    limits: RiskLimits,
+    now_ms: int,
+    *,
+    new_position_value: float = 0.0,
+) -> tuple[bool, str]:
     """Ordered checks from plan A9.3. Returns (ok, machine_reason)."""
     _ = now_ms
     if limits.kill_switch:
         return False, "kill_switch"
+    if plan.symbol.upper() in limits.surveillance_symbols:
+        return False, "surveillance"
     if state.capital < state.start_capital * limits.floor_pct / 100.0:
         return False, "floor"
     if plan.book == "A" and state.day_pnl_pct <= -limits.daily_loss_limit_pct:
@@ -102,8 +117,9 @@ def can_open(state: PortfolioState, plan: Signal, limits: RiskLimits, now_ms: in
     if plan.book == "B" and state.open_swing >= limits.max_open_swing:
         return False, "max_open_swing"
     if plan.book == "A":
-        # provisional: reject if already at exposure cap (caller passes current exposure)
-        if state.mis_exposure >= state.capital * limits.max_mis_exposure_x:
+        # B26: include the new position's value in the exposure check
+        projected = state.mis_exposure + max(0.0, new_position_value)
+        if projected > state.capital * limits.max_mis_exposure_x:
             return False, "mis_exposure"
     if plan.symbol in (state.open_symbols or set()):
         return False, "symbol_open"
@@ -117,16 +133,23 @@ def can_open(state: PortfolioState, plan: Signal, limits: RiskLimits, now_ms: in
         if state.news_score <= limits.news_block_threshold and plan.side == 1:
             return False, "news_risk_off"
         if state.news_score >= -limits.news_block_threshold and plan.side == -1:
-            # strongly positive news: skip shorts
             if state.news_score >= abs(limits.news_block_threshold):
                 return False, "news_risk_on_short_block"
     return True, "ok"
 
 
 def limits_from_settings(settings: Any) -> RiskLimits:
+    surv: frozenset[str] = frozenset()
+    try:
+        from data.surveillance import load_surveillance_symbols
+
+        surv = load_surveillance_symbols()
+    except Exception:  # noqa: BLE001
+        surv = frozenset()
     return RiskLimits(
         risk_per_trade_pct=float(getattr(settings, "risk_per_trade_pct", 1.0)),
         min_position_inr=float(getattr(settings, "min_position_inr", 100_000.0)),
+        min_position_cnc_inr=float(getattr(settings, "min_position_cnc_inr", 20_000.0)),
         max_position_pct_capital=float(getattr(settings, "max_position_pct_capital", 300.0)),
         max_mis_exposure_x=float(getattr(settings, "max_mis_exposure_x", 3.0)),
         max_open_intraday=int(getattr(settings, "max_open_intraday", 3)),
@@ -138,4 +161,5 @@ def limits_from_settings(settings: Any) -> RiskLimits:
         kill_switch=bool(getattr(settings, "kill_switch", False)),
         news_filter_enabled=bool(getattr(settings, "news_filter_enabled", False)),
         news_block_threshold=float(getattr(settings, "news_block_threshold", -0.5)),
+        surveillance_symbols=surv,
     )

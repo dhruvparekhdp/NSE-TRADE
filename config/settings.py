@@ -46,10 +46,11 @@ class Settings(BaseSettings):
     books_enabled: list[str] = Field(default_factory=lambda: ["A", "B"])
     strategies_enabled: list[str] = Field(default_factory=list)
 
-    capital_inr: float = 50_000.0
+    capital_inr: float = 100_000.0  # PLAN_V2 D3
     risk_per_trade_pct: float = 1.0
     first_live_risk_pct: float = 0.5
     min_position_inr: float = 100_000.0
+    min_position_cnc_inr: float = 20_000.0  # PLAN_V2 D3 / MARKET_INDIA §5
     max_position_pct_capital: float = 300.0
     max_mis_exposure_x: float = 3.0
     max_open_intraday: int = 3
@@ -57,8 +58,14 @@ class Settings(BaseSettings):
     daily_loss_limit_pct: float = 2.0
     floor_pct: float = 80.0
 
-    no_entry_after: str = "14:45"
-    square_off_at: str = "15:05"
+    broker_squareoff_at: str = "15:10"  # VERIFY Angel app (V1-3)
+    squareoff_lead_min: int = 15
+    no_entry_lead_min: int = 20
+    # Derived at runtime from broker_squareoff_at + leads (defaults match 15:10 → 14:55 / 14:35)
+    no_entry_after: str = "14:35"
+    square_off_at: str = "14:55"
+    trade_special_sessions: bool = False  # Muhurat: no new entries (V1-2)
+    book_a_mode: Literal["off", "shadow", "paper"] = "shadow"
     max_spread_pct: float = 0.10
     circuit_buffer_pct: float = 2.0
     entry_limit_offset_pct: float = 0.05

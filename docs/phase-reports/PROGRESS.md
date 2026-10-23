@@ -23,13 +23,13 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 | id | status | commit | note |
 |---|---|---|---|
 | V1-1 | done | c5c6fc4 | sessions.json + session_state(stock_class) |
-| V1-2 | todo | | holidays / CalendarMissing / Muhurat |
-| V1-3 | todo | | derive square_off / no_entry |
-| V1-4 | todo | | costs_angel.json + min brokerage ₹5 |
-| V1-5 | todo | | instruments ticks/is_fo + surveillance |
-| V1-6 | todo | | universe_history survivorship |
-| V1-7 | todo | | UDiFF bhav + corporate actions |
-| V1-8 | todo | | events.py results/expiry/MPC |
+| V1-2 | done | 3f027cb | holidays / CalendarMissing / Muhurat / runner skip |
+| V1-3 | done | 3f027cb | derive square_off / no_entry |
+| V1-4 | done | 3f027cb | costs_angel.json + min brokerage ₹5 |
+| V1-5 | done | 3f027cb | instruments is_fo + surveillance + exposure |
+| V1-6 | done | 3f027cb | universe_history survivorship |
+| V1-7 | done | 3f027cb | UDiFF bhav + corporate actions |
+| V1-8 | done | 3f027cb | events.py results/expiry/MPC |
 
 ## V1b — opening (`feat/v1b-opening`)
 

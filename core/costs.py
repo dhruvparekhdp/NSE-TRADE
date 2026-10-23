@@ -22,6 +22,7 @@ class CostRates:
     gst_pct: float
     dp_inr: float = 0.0
     dp_gst_pct: float = 18.0
+    brokerage_min_inr: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -60,12 +61,14 @@ def rates_for(product: Product, raw: dict[str, Any] | None = None) -> CostRates:
         gst_pct=float(d["gst_pct"]),
         dp_inr=float(d.get("dp_inr", 0.0)),
         dp_gst_pct=float(d.get("dp_gst_pct", 18.0)),
+        brokerage_min_inr=float(d.get("brokerage_min_inr", raw.get("brokerage_min_inr", 5.0))),
     )
 
 
 def order_brokerage(value: float, rates: CostRates) -> float:
-    """min(flat, pct% of order value) per executed order."""
-    return _r2(min(rates.brokerage_flat_inr, value * rates.brokerage_pct / 100.0))
+    """max(min ₹5, min(₹20, 0.1% of value)) per executed order (PLAN_V2 V1-4)."""
+    capped = min(rates.brokerage_flat_inr, value * rates.brokerage_pct / 100.0)
+    return _r2(max(rates.brokerage_min_inr, capped))
 
 
 def round_trip(
