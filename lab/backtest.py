@@ -11,6 +11,7 @@ from core.exits import ExitRules, Position, fill_entry, step_exits
 from core.risk import PortfolioState, RiskLimits, can_open, size
 from core.types import Bar, Signal
 from data.universe import universe_on
+from lab.context import bars_for_strategy
 from strategies.base import BarView, Context, Strategy, mirror, random_baseline
 
 
@@ -242,7 +243,6 @@ def run_intraday_day(
 
     for i, bar in enumerate(bars_1m):
         decision_ms = bar.ts_ms + 60_000
-        view = BarView(bars=bars_1m[: i + 1], decision_ms=decision_ms, timeframe="1m")
 
         if open_pos is not None and open_tr is not None:
             open_pos, ev = step_exits(open_pos, bar, rules, atr=None)
@@ -261,6 +261,9 @@ def run_intraday_day(
                 continue
             if strat.id in done_today:
                 continue
+            # R6 / B14: resample 1m → strategy timeframe before on_bar
+            tf_bars = bars_for_strategy(bars_1m[: i + 1], strat.timeframe)
+            view = BarView(bars=tf_bars, decision_ms=decision_ms, timeframe=strat.timeframe)
             for sig in strat.on_bar(symbol, view, ctx):
                 result.signals.append(sig)
                 ok, _ = can_open(state, sig, limits, decision_ms)
