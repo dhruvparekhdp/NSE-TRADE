@@ -237,6 +237,8 @@ def run_intraday_day(
     open_pos: Position | None = None
     open_tr: BTTrade | None = None
     ctx = ctx or Context(trade_date="day")
+    # R5: one trade per strategy × symbol × day (no re-entry after a stop).
+    done_today: set[str] = set()
 
     for i, bar in enumerate(bars_1m):
         decision_ms = bar.ts_ms + 60_000
@@ -247,6 +249,7 @@ def run_intraday_day(
             if ev:
                 _close_bt(open_tr, ev.price, ev.ts_ms, ev.reason, open_pos.sessions_held)
                 result.trades.append(open_tr)
+                done_today.add(open_tr.strategy)
                 state.open_intraday = 0
                 state.open_symbols.discard(symbol)
                 open_pos = None
@@ -255,6 +258,8 @@ def run_intraday_day(
 
         for strat in strategies:
             if strat.book != "A":
+                continue
+            if strat.id in done_today:
                 continue
             for sig in strat.on_bar(symbol, view, ctx):
                 result.signals.append(sig)
@@ -289,6 +294,7 @@ def run_intraday_day(
                 )
                 state.open_intraday = 1
                 state.open_symbols.add(symbol)
+                done_today.add(sig.strategy)
                 break
             if open_tr:
                 break
