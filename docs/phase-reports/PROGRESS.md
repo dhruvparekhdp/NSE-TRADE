@@ -58,9 +58,9 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V3-1 | todo | | real bhavcopy lake |
-| V3-2 | todo | | PREREG.md before trials |
-| V3-3 | todo | | run 5 trials + gate table |
+| V3-1 | done | 9ccff3f | bhav downloader
+| V3-2 | done | 9ccff3f | PREREG.md
+| V3-3 | done | 9ccff3f | trial runner + gate table
 
 ## V4 — paper (`feat/v4-paper`)
 

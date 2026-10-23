@@ -7,10 +7,21 @@ from strategies.orb import ORB
 from strategies.pdh_rs import PDHRS
 from strategies.swing_breakout import SwingDonchian, SwingKeltner
 from strategies.vwap_revert import VWAPRevert
+from strategies.xsmom import XSMom
 
 ALL = {
     s.id: s
-    for s in [ORB(), VWAPRevert(), GapFade(), GapAndGo(), AfternoonMomo(), PDHRS(), SwingDonchian(), SwingKeltner()]
+    for s in [
+        ORB(),
+        VWAPRevert(),
+        GapFade(),
+        GapAndGo(),
+        AfternoonMomo(),
+        PDHRS(),
+        SwingDonchian(),
+        SwingKeltner(),
+        XSMom(),
+    ]
 }
 
 def get(strategy_id: str):
