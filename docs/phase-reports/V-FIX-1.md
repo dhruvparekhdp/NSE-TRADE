@@ -2,7 +2,7 @@
 
 Branch: `feat/v-fix-1` (from `main` + `origin/feat/review-v0-v6`)  
 Source: `docs/reviews/REVIEW_V0-V6.md` §5  
-Not pushed; not merged to `main`.
+Pushed as `origin/feat/v-fix-1`; not merged to `main`. Open PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/v-fix-1
 
 ## Summary
 
