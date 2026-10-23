@@ -1,5 +1,6 @@
 {
   "ok": true,
+  "book_b_slot_ok": true,
   "mode": "paper",
   "live_orders": false,
   "kill_switch": false,
