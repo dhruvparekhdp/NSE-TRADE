@@ -37,15 +37,30 @@ class BarBuilder:
     _last_vol: dict[str, int] = field(default_factory=dict)
 
     def on_tick(self, tick: Tick, now_ms: int | None = None) -> list[Bar]:
+        """Build 1m bars. Late ticks within `late_slack_ms` still update that minute (V6-2)."""
         now = now_ms if now_ms is not None else tick.ts_ms
         key = tick.symbol
         minute = minute_floor_ms(tick.ts_ms)
-        # late tick: assign to previous minute if within slack and that bar still open conceptually
-        if tick.ts_ms + self.late_slack_ms < now and minute < minute_floor_ms(now):
-            # still allow into that minute bar if we have it
-            pass
+        # Drop ticks that are too late to safely amend a finished minute
+        if now - tick.ts_ms > self.late_slack_ms and minute < minute_floor_ms(now) - 60_000:
+            return []
         closed: list[Bar] = []
         cur = self.current.get(key)
+        # Out-of-order: tick belongs to an older minute we already finished — amend if in slack
+        if cur is not None and minute < cur.ts_ms:
+            for i, b in enumerate(self.finished):
+                if b.ts_ms == minute and key:  # finished list is flat; amend matching open time
+                    self.finished[i] = Bar(
+                        ts_ms=b.ts_ms,
+                        open=b.open,
+                        high=max(b.high, tick.ltp),
+                        low=min(b.low, tick.ltp),
+                        close=tick.ltp,
+                        volume=b.volume,
+                        source="ws",
+                    )
+                    return []
+            return []
         if cur is not None and cur.ts_ms != minute:
             closed.append(cur)
             self.finished.append(cur)

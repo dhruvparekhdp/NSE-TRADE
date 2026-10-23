@@ -90,10 +90,10 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V6-1 | todo | | Angel WS |
-| V6-2 | todo | | bars late-tick |
-| V6-3 | todo | | Book A shadow signals |
-| V6-4 | todo | | 1m history depth report |
+| V6-1 | done | db7a6e7 | Angel WS |
+| V6-2 | done | db7a6e7 | bars late-tick |
+| V6-3 | done | db7a6e7 | Book A shadow signals |
+| V6-4 | done | db7a6e7 | 1m history depth report |
 
 ## V7 — live (STOP — needs owner written yes)
 
