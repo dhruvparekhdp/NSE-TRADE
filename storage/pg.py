@@ -15,9 +15,24 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS app_settings_history (
+  id BIGSERIAL PRIMARY KEY,
+  key TEXT NOT NULL,
+  fingerprint TEXT,
+  masked TEXT NOT NULL,
+  saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  saved_by TEXT NOT NULL DEFAULT 'admin'
+);
+CREATE INDEX IF NOT EXISTS app_settings_history_key_idx ON app_settings_history(key, saved_at DESC);
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,
   applied_ms BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audit_events (
+  id BIGSERIAL PRIMARY KEY,
+  ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -76,6 +91,62 @@ def save_app_setting(key: str, value: Any, url: str | None = None) -> None:
 def clear_app_setting(key: str, url: str | None = None) -> None:
     """Crypto 'Clear' saves empty rather than DELETE — we store empty string sealed-or-not."""
     save_app_setting(key, "", url)
+
+
+def append_settings_history(
+    key: str,
+    *,
+    fingerprint: str | None,
+    masked: str,
+    saved_by: str = "admin",
+    url: str | None = None,
+) -> None:
+    with connect(url) as conn:
+        conn.execute(
+            """
+            INSERT INTO app_settings_history(key, fingerprint, masked, saved_by)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (key, fingerprint, masked, saved_by),
+        )
+        conn.commit()
+
+
+def recent_settings_history(key: str, *, limit: int = 5, url: str | None = None) -> list[dict[str, Any]]:
+    with connect(url) as conn:
+        rows = conn.execute(
+            """
+            SELECT fingerprint, masked, saved_at, saved_by
+            FROM app_settings_history
+            WHERE key=%s
+            ORDER BY saved_at DESC
+            LIMIT %s
+            """,
+            (key, limit),
+        ).fetchall()
+    out = []
+    for fp, masked, saved_at, saved_by in rows:
+        out.append(
+            {
+                "fingerprint": fp,
+                "masked": masked,
+                "saved_ms": int(saved_at.timestamp() * 1000) if saved_at else None,
+                "saved_by": saved_by,
+            }
+        )
+    return out
+
+
+def audit_event(kind: str, detail: str = "", url: str | None = None) -> None:
+    try:
+        with connect(url) as conn:
+            conn.execute(
+                "INSERT INTO audit_events(kind, detail) VALUES (%s, %s)",
+                (kind, detail),
+            )
+            conn.commit()
+    except Exception:  # noqa: BLE001 — audit must never break the request
+        pass
 
 
 def nse_url_from_crypto_url(crypto_url: str, dbname: str = "nse_engine") -> str:

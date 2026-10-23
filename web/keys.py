@@ -2,16 +2,27 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
+import bcrypt
 from aiohttp import web
 
 from config import secret_box
+from config.key_display import fingerprint, first_diff_at, mask_value
 from config.key_fields import KEY_FIELDS
 from config.secrets_loader import clear_key, save_key
 from config.settings import get_settings
 from web.auth import require_admin as _require_admin
-from web.secure_channel import require_secure_channel
+from web.secure_channel import is_secure_channel, require_secure_channel
+
+_reveal_times: list[float] = []
+_REVEAL_WINDOW_S = 600.0
+_REVEAL_MAX = 5
+
+
+def reset_reveal_rate_for_tests() -> None:
+    _reveal_times.clear()
 
 PAGE = """<!DOCTYPE html>
 <html lang="en"><head>
@@ -80,23 +91,44 @@ async function render(){
   document.getElementById('angel-tools').hidden=false;
   for(const row of data.rows){
     const el = document.createElement('div'); el.className='key-card';
+    const fp = row.fingerprint ? (' · fp '+row.fingerprint) : '';
+    const masked = row.masked ? (' · '+row.masked+' ('+row.length+')') : '';
     el.innerHTML = `<label>${row.label}</label><div class="help">${row.help}</div>
-      <div class="where">${row.where}${row.hint?(' · '+row.hint):''}</div>
+      <div class="where">${row.where}${masked}${fp}</div>
       <input data-key="${row.key}" type="${row.kind==='secret'?'password':'text'}" placeholder="${row.is_set?'•••• (leave blank to keep)':''}" />
       <div class="row">
         <button data-act="save" data-key="${row.key}">Save</button>
+        <button data-act="compare" data-key="${row.key}">Compare</button>
+        <button data-act="reveal" data-key="${row.key}">Reveal</button>
         <button class="danger" data-act="clear" data-key="${row.key}">Clear</button>
       </div>`;
     root.appendChild(el);
   }
+  const secure = !!data.secure_channel;
+  if(!secure){
+    root.insertAdjacentHTML('afterbegin','<p class="help" style="color:#f88">Compare / Reveal / Save need HTTPS, localhost or Tailscale</p>');
+  }
   root.onclick = async (ev)=>{
     const btn = ev.target.closest('button'); if(!btn) return;
     const key = btn.dataset.key; const act = btn.dataset.act;
+    const input = root.querySelector(`input[data-key="${key}"]`);
     if(act==='save'){
-      const input = root.querySelector(`input[data-key="${key}"]`);
       const value = input.value;
       if(!value){ alert('type a value (blank keeps existing)'); return; }
       await api('api/keys/save',{key,value}); input.value=''; await render();
+    }
+    if(act==='compare'){
+      const value = input.value; if(!value){ alert('type a value to compare'); return; }
+      const d = await api('api/keys/compare',{key,value});
+      alert(d.match ? 'matches the saved value' : ('differs'+(d.first_diff_at!=null?(' at character '+(d.first_diff_at+1)):'')));
+    }
+    if(act==='reveal'){
+      const password = prompt('Re-type admin password to reveal');
+      if(!password) return;
+      const d = await api('api/keys/reveal',{key,password});
+      alert('Value (copied to field for 30s):\\n'+d.value);
+      input.type='text'; input.value=d.value;
+      setTimeout(()=>{ input.type='password'; input.value=''; }, 30000);
     }
     if(act==='clear'){ if(!confirm('Clear stored value?')) return; await api('api/keys/clear',{key}); await render(); }
   };
@@ -140,7 +172,14 @@ def status_rows() -> list[dict[str, Any]]:
             where = ".env / process only"
         else:
             where = "not set"
-        hint = ("…" + live[-4:]) if (f.kind == "secret" and len(live) >= 8) else ""
+        history: list = []
+        if database_url() and live:
+            try:
+                from storage.pg import recent_settings_history
+
+                history = recent_settings_history(f.key, limit=5)
+            except Exception:  # noqa: BLE001
+                history = []
         rows.append(
             {
                 "key": f.key,
@@ -149,10 +188,22 @@ def status_rows() -> list[dict[str, Any]]:
                 "kind": f.kind,
                 "where": where,
                 "is_set": bool(live),
-                "hint": hint,
+                "masked": mask_value(live, kind=f.kind, key=f.key) if live else "",
+                "length": len(live) if live else 0,
+                "fingerprint": fingerprint(live, key=f.key) if live else None,
+                "saved_ms": None,
+                "history": history,
             }
         )
     return rows
+
+
+def _admin_password_ok(password: str) -> bool:
+    settings = get_settings()
+    if settings.portal_admin_hash:
+        return bcrypt.checkpw(password.encode(), settings.portal_admin_hash.encode())
+    plain = settings.admin_password.get_secret_value() if settings.admin_password else None
+    return bool(plain) and password == plain
 
 
 async def handle_keys_page(_request: web.Request) -> web.Response:
@@ -162,8 +213,61 @@ async def handle_keys_page(_request: web.Request) -> web.Response:
 async def handle_keys_api(request: web.Request) -> web.Response:
     _require_admin(request)
     return web.json_response(
-        {"rows": status_rows(), "encryption": secret_box.available(), "master_key": bool(secret_box.available())}
+        {
+            "rows": status_rows(),
+            "encryption": secret_box.available(),
+            "master_key": bool(secret_box.available()),
+            "secure_channel": is_secure_channel(request),
+        }
     )
+
+
+async def handle_keys_compare(request: web.Request) -> web.Response:
+    _require_admin(request)
+    require_secure_channel(request)
+    data = await request.json()
+    key = data.get("key") or ""
+    value = data.get("value") or ""
+    if key not in {f.key for f in KEY_FIELDS}:
+        raise web.HTTPBadRequest(text="unknown key")
+    live = _plain(get_settings(), key)
+    match = live == value and bool(live)
+    return web.json_response(
+        {
+            "match": match,
+            "first_diff_at": None if match else first_diff_at(live, value),
+        }
+    )
+
+
+async def handle_keys_reveal(request: web.Request) -> web.Response:
+    _require_admin(request)
+    require_secure_channel(request)
+    now = time.monotonic()
+    _reveal_times[:] = [t for t in _reveal_times if now - t < _REVEAL_WINDOW_S]
+    if len(_reveal_times) >= _REVEAL_MAX:
+        raise web.HTTPTooManyRequests(text="reveal rate limit (5 per 10 min)")
+    data = await request.json()
+    key = data.get("key") or ""
+    password = data.get("password") or ""
+    if key not in {f.key for f in KEY_FIELDS}:
+        raise web.HTTPBadRequest(text="unknown key")
+    if not _admin_password_ok(password):
+        raise web.HTTPForbidden(text="bad password")
+    live = _plain(get_settings(), key)
+    if not live:
+        raise web.HTTPNotFound(text="not set")
+    _reveal_times.append(now)
+    try:
+        from storage.pg import audit_event, database_url
+
+        if database_url():
+            audit_event("key_revealed", key)
+    except Exception:  # noqa: BLE001
+        pass
+    resp = web.json_response({"value": live})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 async def handle_keys_save(request: web.Request) -> web.Response:
@@ -198,4 +302,6 @@ def register_keys_routes(app: web.Application) -> None:
     app.router.add_get("/api/keys", handle_keys_api)
     app.router.add_post("/api/keys/save", handle_keys_save)
     app.router.add_post("/api/keys/clear", handle_keys_clear)
+    app.router.add_post("/api/keys/compare", handle_keys_compare)
+    app.router.add_post("/api/keys/reveal", handle_keys_reveal)
     app.router.add_post("/api/keys/test-angel", handle_test_angel)

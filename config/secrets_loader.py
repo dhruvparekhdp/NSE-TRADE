@@ -42,7 +42,8 @@ def apply_db_secrets() -> list[str]:
 
 
 def save_key(key: str, value: str) -> None:
-    from storage.pg import save_app_setting
+    from config.key_display import fingerprint, mask_value
+    from storage.pg import append_settings_history, database_url, save_app_setting
 
     field = BY_KEY.get(key)
     if field is None:
@@ -58,13 +59,30 @@ def save_key(key: str, value: str) -> None:
         setattr(settings, key, SecretStr(value))
     else:
         setattr(settings, key, value)
+    if database_url():
+        try:
+            append_settings_history(
+                key,
+                fingerprint=fingerprint(value, key=key),
+                masked=mask_value(value, kind=field.kind, key=key),
+            )
+        except Exception:  # noqa: BLE001
+            log.warning("settings history append failed for %s", key)
 
 
 def clear_key(key: str) -> None:
-    from storage.pg import save_app_setting
+    from config.key_display import mask_value
+    from storage.pg import append_settings_history, database_url, save_app_setting
 
     if key not in BY_KEY:
         raise KeyError(key)
+    field = BY_KEY[key]
     save_app_setting(key, "")
     settings = get_settings()
     setattr(settings, key, None)
+    if database_url():
+        try:
+            masked = mask_value("", kind=field.kind, key=key) or "(cleared)"
+            append_settings_history(key, fingerprint=None, masked=masked)
+        except Exception:  # noqa: BLE001
+            log.warning("settings history clear-append failed for %s", key)
