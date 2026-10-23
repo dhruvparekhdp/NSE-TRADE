@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+import sqlite3
 from dataclasses import dataclass
 from typing import Any
+
+from data.nse_http import JsonGetter, NseUnavailable
+
+log = logging.getLogger(__name__)
+
+PREOPEN_NIFTY_URL = "https://www.nseindia.com/api/market-data-pre-open?key=NIFTY"
+PREOPEN_FO_URL = "https://www.nseindia.com/api/market-data-pre-open?key=FO"
 
 
 @dataclass(frozen=True)
@@ -81,3 +90,56 @@ def mark_final(snaps: list[PreopenSnap]) -> list[PreopenSnap]:
         )
         for s in snaps
     ]
+
+
+def save_preopen_snaps(conn: sqlite3.Connection, snaps: list[PreopenSnap]) -> int:
+    n = 0
+    for s in snaps:
+        conn.execute(
+            "INSERT OR REPLACE INTO preopen_snapshots"
+            "(trade_date, ts_ms, symbol, iep, prev_close, chg_pct, buy_qty, sell_qty, final, source) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                s.trade_date,
+                s.ts_ms,
+                s.symbol,
+                s.iep,
+                s.prev_close,
+                s.chg_pct,
+                s.buy_qty,
+                s.sell_qty,
+                int(s.final),
+                s.source,
+            ),
+        )
+        n += 1
+    conn.commit()
+    return n
+
+
+def refresh_preopen(
+    conn: sqlite3.Connection,
+    get_json: JsonGetter,
+    *,
+    trade_date: str,
+    ts_ms: int,
+    final: bool = False,
+) -> list[PreopenSnap]:
+    """Fetch NIFTY + FO pre-open JSON; store rows. Empty on NSE block (logged)."""
+    snaps: list[PreopenSnap] = []
+    for url in (PREOPEN_NIFTY_URL, PREOPEN_FO_URL):
+        try:
+            raw = get_json(url)
+        except NseUnavailable as exc:
+            log.warning("preopen unavailable (%s): %s", url, exc)
+            continue
+        if not isinstance(raw, dict):
+            continue
+        snaps.extend(
+            parse_preopen_payload(raw, trade_date=trade_date, ts_ms=ts_ms, final=final)
+        )
+    if final:
+        snaps = mark_final(snaps)
+    if snaps:
+        save_preopen_snaps(conn, snaps)
+    return snaps

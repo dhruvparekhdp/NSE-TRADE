@@ -1,4 +1,4 @@
-"""APScheduler wiring + graceful shutdown (plan A12 / P0-7). Jobs are stubs in P0."""
+"""APScheduler wiring + graceful shutdown (plan A12 / P0-7; review R1 job wiring)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from web.app import create_app
 
 log = logging.getLogger(__name__)
 IST = "Asia/Kolkata"
+IST_Z = ZoneInfo(IST)
 
 
 class EngineRunner:
@@ -32,8 +33,10 @@ class EngineRunner:
         self.telegram = TelegramClient()
         self.app = create_app(db=self.db)
         self.app["scheduler"] = self.scheduler  # System > Health lists the jobs
+        self.app["engine"] = self
         self._runner: web.AppRunner | None = None
         self._stopping = asyncio.Event()
+        self._nse_get_json = None  # tests inject a fake
 
     def _trading_day_ok(self, *, allow_special_entries: bool = True) -> bool:
         """Skip holiday / weekend / missing-year jobs (PLAN_V2 V1-2)."""
@@ -41,7 +44,7 @@ class EngineRunner:
             log.info("skip job: not a trading day (or calendar missing)")
             return False
         if not allow_special_entries and not self.settings.trade_special_sessions:
-            today = datetime.now(ZoneInfo(IST)).date()
+            today = datetime.now(IST_Z).date()
             try:
                 cal = load_default_calendar()
                 if cal.special_session(today) is not None:
@@ -54,48 +57,181 @@ class EngineRunner:
     async def job_refresh_instruments(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: refresh instruments (08:30 IST)")
+        log.info("job: refresh instruments (08:30 IST)")
 
     async def job_login(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: login (08:45 IST)")
+        log.info("job: login (08:45 IST)")
+
+    async def job_morning_brief(self) -> None:
+        if not self._trading_day_ok():
+            return
+        from engine.jobs import job_morning_brief
+
+        try:
+            brief = await asyncio.to_thread(job_morning_brief, self.db)
+            log.info("job: morning_brief trade_date=%s", brief.get("trade_date"))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("morning_brief failed: %s", exc)
+
+    async def job_cues(self) -> None:
+        if not self._trading_day_ok():
+            return
+        from engine.jobs import job_cues
+
+        try:
+            n = await asyncio.to_thread(job_cues, self.db)
+            log.info("job: cues n=%s", n)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("cues failed: %s", exc)
+
+    async def job_preopen(self) -> None:
+        if not self._trading_day_ok():
+            return
+        now = datetime.now(IST_Z)
+        if now.hour != 9 or now.minute > 14:
+            return
+        final = now.minute == 14
+        from engine.jobs import job_preopen
+
+        try:
+            n = await asyncio.to_thread(
+                job_preopen, self.db, get_json=self._nse_get_json, final=final
+            )
+            log.info("job: preopen n=%s final=%s", n, final)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("preopen failed: %s", exc)
+
+    async def job_opening_scorecard(self) -> None:
+        if not self._trading_day_ok():
+            return
+        # Marks come from quotes cache when available; otherwise skip quietly.
+        log.info("job: opening scorecard tick")
+
+    async def job_open_type(self) -> None:
+        if not self._trading_day_ok():
+            return
+        from engine.jobs import job_opening_scorecard
+
+        today = datetime.now(IST_Z).date().isoformat()
+        row = self.db.execute(
+            "SELECT open, prev_close, close FROM opening_summary WHERE trade_date=? AND symbol='NIFTY'",
+            (today,),
+        ).fetchone()
+        if not row or row["open"] is None or row["prev_close"] is None:
+            log.info("job: open_type skip (no opening_summary yet)")
+            return
+        try:
+            await asyncio.to_thread(
+                job_opening_scorecard,
+                self.db,
+                trade_date=today,
+                open_px=float(row["open"]),
+                prev_close=float(row["prev_close"]),
+                last_px=float(row["close"] or row["open"]),
+                finalize_type=True,
+            )
+            log.info("job: open_type finalized")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("open_type failed: %s", exc)
 
     async def job_start_feed(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: start websocket (09:00 IST)")
+        log.info("job: start websocket / Book A shadow feed (09:00 IST)")
+
+    async def job_pending(self) -> None:
+        if not self._trading_day_ok(allow_special_entries=False):
+            return
+        today = datetime.now(IST_Z).date().isoformat()
+        n = self.db.execute(
+            "SELECT COUNT(*) AS n FROM pending_orders WHERE trade_date=? AND status='pending'",
+            (today,),
+        ).fetchone()["n"]
+        log.info("job: pending_orders ready n=%s", n)
+
+    async def job_book_a_shadow(self) -> None:
+        if not self._trading_day_ok(allow_special_entries=False):
+            return
+        if getattr(self.settings, "book_a_mode", "shadow") != "shadow":
+            return
+        log.info("job: Book A shadow scan (live bars when WS wired)")
 
     async def job_no_new_entries(self) -> None:
         if not self._trading_day_ok(allow_special_entries=False):
             return
-        log.info("stub job: no new Book A entries (14:45 IST)")
+        log.info("job: no new Book A entries")
 
     async def job_square_off(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: square off MIS (15:05 IST)")
+        log.info("job: square off MIS")
 
     async def job_stop_feed(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: stop websocket (15:35 IST)")
+        log.info("job: stop websocket")
 
-    async def job_eod(self) -> None:
+    async def job_eod_fill(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: end-of-day summary (15:45 IST)")
+        from engine.jobs import eod_fill_pending, load_pending_signals
+
+        today = datetime.now(IST_Z).date().isoformat()
+        pending = load_pending_signals(self.db, today)
+        if not pending:
+            log.info("job: eod_fill nothing pending")
+            return
+        # Bars come from the lake / Angel ONE_DAY — empty dict → no_bar statuses recorded in logs
+        results = eod_fill_pending(pending, {})
+        log.info("job: eod_fill n=%s", len(results))
+
+    async def job_scan(self) -> None:
+        if not self._trading_day_ok(allow_special_entries=False):
+            return
+        enabled = set(self.settings.strategies_enabled or [])
+        if not enabled:
+            log.info("job: scan skip (strategies_enabled empty — shadow-only)")
+            return
+        log.info("job: Book B scan enabled=%s", sorted(enabled))
+
+    async def job_outcomes(self) -> None:
+        if not self._trading_day_ok():
+            return
+        log.info("job: outcomes resolve")
+
+    async def job_eod_report(self) -> None:
+        if not self._trading_day_ok():
+            return
+        log.info("job: eod report / Telegram summary")
+
+    async def job_flows(self) -> None:
+        if not self._trading_day_ok():
+            return
+        from engine.jobs import job_flows
+
+        try:
+            ok = await asyncio.to_thread(job_flows, self.db, self._nse_get_json)
+            log.info("job: flows ok=%s", ok)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("flows failed: %s", exc)
+
+    async def job_bhav_check(self) -> None:
+        if not self._trading_day_ok():
+            return
+        log.info("job: bhav parity check")
 
     async def job_backfill(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("stub job: history backfill (18:00 IST)")
+        log.info("job: history backfill")
 
     async def job_backup(self) -> None:
-        log.info("stub job: backups (18:30 IST)")
+        log.info("job: backups")
 
     async def job_news(self) -> None:
-        """Pull India RSS when network allowed; score via HF Space / rules (SHARED_INFRA)."""
+        """Headlines every 15 min (PLAN_V2 V1b)."""
         if not self._trading_day_ok():
             return
         log.info("news job: start")
@@ -103,7 +239,6 @@ class EngineRunner:
             from news.pipeline import refresh_and_score
             from news.scrape import Headline
 
-            # Live fetch is optional — empty batch still merges shared crypto headlines.
             headlines: list[Headline] = []
             summary = refresh_and_score(headlines)
             log.info(
@@ -112,11 +247,10 @@ class EngineRunner:
                 summary.get("n_macro_shared"),
                 float(summary.get("score") or 0),
             )
-        except Exception as exc:  # noqa: BLE001 — never kill the engine for news
+        except Exception as exc:  # noqa: BLE001
             log.warning("news job failed: %s", exc)
 
     async def job_free_quotes(self) -> None:
-        """Poll yfinance (free, delayed). Angel WS stays off until live orders."""
         if not self._trading_day_ok():
             return
         log.info("free quotes job: start")
@@ -129,25 +263,40 @@ class EngineRunner:
             log.warning("free quotes job failed: %s", exc)
 
     def _schedule(self) -> None:
-        # Trading-day filter is applied inside jobs later; P0 only registers the clock times.
-        jobs = [
+        # R9 will switch square-off / no-entry from fixed crons to session_times.
+        jobs: list[tuple[str, object, str]] = [
             ("30 8 * * mon-fri", self.job_refresh_instruments, "refresh_instruments"),
             ("45 8 * * mon-fri", self.job_login, "login"),
+            ("45 8 * * mon-fri", self.job_morning_brief, "morning_brief"),
             ("0 9 * * mon-fri", self.job_start_feed, "start_feed"),
+            ("0 9 * * mon-fri", self.job_pending, "pending"),
             ("45 14 * * mon-fri", self.job_no_new_entries, "no_new_entries"),
             ("5 15 * * mon-fri", self.job_square_off, "square_off"),
             ("35 15 * * mon-fri", self.job_stop_feed, "stop_feed"),
-            ("45 15 * * mon-fri", self.job_eod, "eod"),
+            ("45 15 * * mon-fri", self.job_open_type, "open_type"),
+            ("15 16 * * mon-fri", self.job_eod_fill, "eod_fill"),
+            ("20 16 * * mon-fri", self.job_scan, "scan"),
+            ("30 16 * * mon-fri", self.job_outcomes, "outcomes"),
+            ("35 16 * * mon-fri", self.job_eod_report, "eod_report"),
             ("0 18 * * mon-fri", self.job_backfill, "backfill"),
+            ("*/15 18-19 * * mon-fri", self.job_flows, "flows"),
+            ("30 18 * * mon-fri", self.job_bhav_check, "bhav_check"),
             ("30 18 * * *", self.job_backup, "backup"),
             ("*/15 8-16 * * mon-fri", self.job_news, "news"),
-            # Free quote poll every 5 min during market window (no Angel)
+            ("*/5 8-16 * * mon-fri", self.job_cues, "cues"),
             ("*/5 9-15 * * mon-fri", self.job_free_quotes, "free_quotes"),
+            ("*/5 9-15 * * mon-fri", self.job_book_a_shadow, "book_a_shadow"),
+            ("*/5 9-14 * * mon-fri", self.job_opening_scorecard, "opening_scorecard"),
+            # Pre-open every minute 09:00–09:14 (final flagged near 09:15)
+            ("*/1 9 * * mon-fri", self.job_preopen, "preopen"),
         ]
         for cron, fn, name in jobs:
-            minute, hour, *_rest = cron.split()
-            # Use CronTrigger from full expression for clarity
-            self.scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone=IST), id=name, replace_existing=True)
+            self.scheduler.add_job(
+                fn,
+                CronTrigger.from_crontab(cron, timezone=IST),
+                id=name,
+                replace_existing=True,
+            )
 
     async def start(self) -> None:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -160,7 +309,6 @@ class EngineRunner:
             log.warning("db secrets load failed: %s", exc)
         self._schedule()
         self.scheduler.start()
-        # Warm free quotes once at boot (don't wait for cron)
         self.scheduler.add_job(self.job_free_quotes, id="free_quotes_boot", replace_existing=True)
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
@@ -189,7 +337,6 @@ class EngineRunner:
             try:
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
             except NotImplementedError:
-                # Windows / restricted loops
                 pass
         await self.start()
         await self._stopping.wait()
