@@ -9,7 +9,7 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V0-1 | todo | | fix 2 ruff F401; MVP PR link |
+| V0-1 | done | ea158de | fix 2 ruff F401; MVP PR link |
 | V0-2 | todo | | web_host 127.0.0.1; Secure cookie; HTTPS keys gate |
 | V0-3 | todo | | `x if x is not None else now()` |
 | V0-4 | todo | | core/ticks.py + tick_bands.json |

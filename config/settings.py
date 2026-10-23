@@ -73,8 +73,10 @@ class Settings(BaseSettings):
     tick_stale_alert_s: int = 30
 
     expected_static_ip: str | None = None
-    web_host: str = "0.0.0.0"  # same EC2 pattern as crypto :8080; NSE uses :8090
+    # Bind loopback by default (PLAN_V2 V0-2 / B24). Nginx or Tailscale publishes the portal.
+    web_host: str = "127.0.0.1"
     web_port: int = 8090
+    cookie_secure: bool = True  # false only for local plain-HTTP dev / pytest
     data_dir: Path = Path("./var")  # runtime only; Python package `data/` is separate
     database_url: str | None = None  # postgres nse_engine — keys live here
     admin_password: SecretStr | None = None  # bootstrap login; prefer PORTAL_ADMIN_HASH

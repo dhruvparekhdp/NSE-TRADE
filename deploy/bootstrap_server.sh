@@ -26,8 +26,10 @@ ADMIN=$(grep -E '^ADMIN_PASSWORD=' "$CRYPTO_ENV" | head -1 | cut -d= -f2- | tr -
 umask 077
 cat > .env <<EOF
 PORT=8090
-WEB_HOST=0.0.0.0
+WEB_HOST=127.0.0.1
 WEB_PORT=8090
+COOKIE_SECURE=false
+# Portal is published via nginx / Tailscale, not a public bind (PLAN_V2 V0-2).
 PYTHONUNBUFFERED=1
 DATABASE_URL=${NSE_DB_URL}
 SECRETS_MASTER_KEY=${MASTER}

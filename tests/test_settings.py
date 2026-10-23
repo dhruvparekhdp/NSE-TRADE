@@ -14,6 +14,8 @@ def test_defaults():
     assert s.books_enabled == ["A", "B"]
     assert s.strategies_enabled == []
     assert s.web_port == 8090
+    assert s.web_host == "127.0.0.1"
+    assert s.cookie_secure is True
 
 
 def test_env_override(monkeypatch):

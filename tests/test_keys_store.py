@@ -24,6 +24,7 @@ async def test_keys_requires_login(tmp_path, monkeypatch):
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     monkeypatch.setenv("PORTAL_ADMIN_HASH", hashed)
     monkeypatch.setenv("SESSION_SECRET", "sess")
+    monkeypatch.setenv("COOKIE_SECURE", "false")  # TestClient speaks plain HTTP
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.delenv("DATABASE_URL", raising=False)
     reset_settings_cache()

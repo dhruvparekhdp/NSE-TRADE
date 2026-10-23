@@ -11,6 +11,7 @@ from config.key_fields import KEY_FIELDS
 from config.secrets_loader import clear_key, save_key
 from config.settings import get_settings
 from web.auth import require_admin as _require_admin
+from web.secure_channel import require_secure_channel
 
 PAGE = """<!DOCTYPE html>
 <html lang="en"><head>
@@ -150,6 +151,7 @@ async def handle_keys_api(request: web.Request) -> web.Response:
 
 async def handle_keys_save(request: web.Request) -> web.Response:
     _require_admin(request)
+    require_secure_channel(request)
     data = await request.json()
     key = data.get("key") or ""
     value = data.get("value") or ""
@@ -162,6 +164,7 @@ async def handle_keys_save(request: web.Request) -> web.Response:
 
 async def handle_keys_clear(request: web.Request) -> web.Response:
     _require_admin(request)
+    require_secure_channel(request)
     data = await request.json()
     key = data.get("key") or ""
     try:

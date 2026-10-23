@@ -16,6 +16,7 @@ async def client(monkeypatch, tmp_path):
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     monkeypatch.setenv("PORTAL_ADMIN_HASH", hashed)
     monkeypatch.setenv("SESSION_SECRET", "unit-test-session-secret")
+    monkeypatch.setenv("COOKIE_SECURE", "false")  # TestClient speaks plain HTTP
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     reset_settings_cache()
     app = create_app()

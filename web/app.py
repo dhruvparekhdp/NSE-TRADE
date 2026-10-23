@@ -69,7 +69,7 @@ async def handle_login(request: web.Request) -> web.Response:
         raise web.HTTPServiceUnavailable(text="session secret not configured")
     cookie = make_session_cookie(secret)
     resp = web.json_response({"ok": True})
-    # Path=/ so cookie works under nginx /nse/ prefix
+    # Path=/ so cookie works under nginx /nse/ prefix; Secure unless cookie_secure=false (V0-2)
     resp.set_cookie(
         COOKIE_NAME,
         cookie,
@@ -77,6 +77,7 @@ async def handle_login(request: web.Request) -> web.Response:
         samesite="Lax",
         max_age=COOKIE_TTL_S,
         path="/",
+        secure=bool(settings.cookie_secure),
     )
     return resp
 
