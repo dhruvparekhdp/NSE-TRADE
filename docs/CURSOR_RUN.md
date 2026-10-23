@@ -95,6 +95,11 @@ WHEN V6 IS DONE
 Write docs/phase-reports/SUMMARY.md: each phase with its PR link and test count, what is verified, and what
 still needs me (Angel login, a contract note for costs, the 2027 holiday file, the GIFT Nifty source, the §11
 questions). Then stop.
+
+AFTER REVIEW V0–V6 (V-FIX rounds)
+- V-FIX-1: `feat/v-fix-1` — prompt in docs/reviews/REVIEW_V0-V6.md §5; report docs/phase-reports/V-FIX-1.md.
+- V-FIX-2 (next): read docs/reviews/REVIEW_V-FIX-2-PLAN.md (F1–F7 + owner checklist). Branch `feat/v-fix-2`
+  after V-FIX-1 merges to main. Planning doc lives on `feat/review-v-fix-2` until merged.
 ```
 
 ## Owner checklist before pasting
