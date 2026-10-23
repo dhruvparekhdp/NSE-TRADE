@@ -1,15 +1,51 @@
-"""Build Angel SmartConnect with real ClientPublicIP / LocalIP / MAC (PLAN_V2 V0-7)."""
+"""Build Angel SmartConnect with real ClientPublicIP / LocalIP / MAC (PLAN_V2 V0-7 / R7)."""
 
 from __future__ import annotations
 
 import logging
 import socket
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from config.settings import get_settings
 
 log = logging.getLogger(__name__)
+
+_SDK_LOGGERS = (
+    "logzero",
+    "logzero_default",
+    "SmartApi",
+    "SmartApi.smartConnect",
+    "smartConnect",
+    "smartapi",
+)
+
+
+def silence_smartapi_loggers() -> None:
+    """Mute SDK/logzero loggers — 1.5.5 dumps PIN/TOTP/API key on failed calls (R7)."""
+    for name in _SDK_LOGGERS:
+        lg = logging.getLogger(name)
+        lg.handlers.clear()
+        lg.addHandler(logging.NullHandler())
+        lg.setLevel(logging.CRITICAL)
+        lg.propagate = False
+    try:
+        import logzero
+
+        logzero.logger.handlers.clear()
+        logzero.logger.addHandler(logging.NullHandler())
+        logzero.logger.setLevel(logging.CRITICAL)
+        logzero.logger.propagate = False
+    except ImportError:
+        pass
+
+
+def totp_now_utc(secret: str) -> str:
+    """TOTP from UTC wall time so TZ env cannot shift the code (V0-9 / R7)."""
+    import pyotp
+
+    return pyotp.TOTP(secret).at(datetime.now(UTC))
 
 
 def local_ip() -> str:
@@ -78,6 +114,7 @@ def apply_ip_headers(api: Any) -> dict[str, str]:
 def build_smart_connect() -> Any:
     from SmartApi import SmartConnect
 
+    silence_smartapi_loggers()
     settings = get_settings()
     key = settings.angel_api_key.get_secret_value() if settings.angel_api_key else ""
     api = SmartConnect(key)

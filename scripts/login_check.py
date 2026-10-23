@@ -10,11 +10,12 @@ import sys
 
 def main() -> int:
     try:
-        import pyotp
-        from SmartApi import SmartConnect
+        import pyotp  # noqa: F401 — presence check
+        from SmartApi import SmartConnect  # noqa: F401
     except ImportError:
         print("install smartapi-python pyotp first", file=sys.stderr)
         return 1
+    from broker.smartconnect_factory import build_smart_connect, totp_now_utc
     from config.secrets_loader import apply_db_secrets
     from config.settings import get_settings
 
@@ -27,8 +28,8 @@ def main() -> int:
     if not s.angel_configured:
         print("Angel keys missing (DB /keys or .env)")
         return 1
-    api = SmartConnect(api_key=s.angel_api_key.get_secret_value())  # type: ignore[union-attr]
-    totp = pyotp.TOTP(s.angel_totp_secret.get_secret_value()).now()  # type: ignore[union-attr]
+    api = build_smart_connect()
+    totp = totp_now_utc(s.angel_totp_secret.get_secret_value())  # type: ignore[union-attr]
     sess = api.generateSession(
         s.angel_client_code.get_secret_value(),  # type: ignore[union-attr]
         s.angel_pin.get_secret_value(),  # type: ignore[union-attr]

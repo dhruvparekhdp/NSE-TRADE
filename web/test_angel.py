@@ -145,16 +145,14 @@ async def handle_test_angel(request: web.Request) -> web.Response:
         api = factory()
         totp_now = totp_factory if totp_factory else (lambda: "000000")
     else:
-        from broker.smartconnect_factory import build_smart_connect
+        from broker.smartconnect_factory import build_smart_connect, totp_now_utc
 
         api = build_smart_connect()
-        import pyotp
-
         settings = get_settings()
         secret = settings.angel_totp_secret.get_secret_value() if settings.angel_totp_secret else ""
 
         def totp_now() -> str:
-            return pyotp.TOTP(secret).now()
+            return totp_now_utc(secret)
 
     body = run_test_angel(api=api, totp_now=totp_now)
     return web.json_response(body)
