@@ -22,7 +22,7 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V1-1 | done | pending | sessions.json + session_state(stock_class) |
+| V1-1 | done | c5c6fc4 | sessions.json + session_state(stock_class) |
 | V1-2 | todo | | holidays / CalendarMissing / Muhurat |
 | V1-3 | todo | | derive square_off / no_entry |
 | V1-4 | todo | | costs_angel.json + min brokerage ₹5 |
