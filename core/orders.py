@@ -84,7 +84,7 @@ class OrderManager:
     ) -> Bracket:
         if symbol in self.reconcile_faults:
             raise RuntimeError(f"reconcile unresolved for {symbol}")
-        now = now_ms or int(time.time() * 1000)
+        now = now_ms if now_ms is not None else int(time.time() * 1000)
         product = "INTRADAY" if book == "A" else "DELIVERY"
         side_str = "BUY" if side > 0 else "SELL"
         if side > 0:
@@ -145,7 +145,7 @@ class OrderManager:
         return br
 
     def on_fill(self, fill: dict[str, Any], now_ms: int | None = None) -> None:
-        now = now_ms or int(time.time() * 1000)
+        now = now_ms if now_ms is not None else int(time.time() * 1000)
         tag = fill["client_tag"]
         order = self.orders_by_tag.get(tag)
         if not order:
