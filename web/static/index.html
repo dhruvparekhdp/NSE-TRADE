@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" data-palette="sage">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="/nse/" />
+  <title>NSE Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="static/style.css" />
+  <script>try{var p=localStorage.getItem("nse-palette");if(p)document.documentElement.setAttribute("data-palette",p)}catch(e){}</script>
+</head>
+<body>
+  <div class="scan" aria-hidden="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div class="tape" aria-label="Quotes"><div class="tape-track" id="tape">loading free quotes…</div></div>
+
+  <div class="wrap">
+    <header class="top">
+      <a class="logo" href="#/command" aria-label="NSE Engine home">
+        <span class="logo-a">NSE/</span>
+        <span class="logo-b"><span class="gl" id="logoWord" data-text="COMMAND">COMMAND</span><span class="blink acc">_</span></span>
+      </a>
+      <nav class="tabs" id="hubTabs" aria-label="Hubs"></nav>
+      <div class="chips">
+        <div class="chip"><small>IST</small><b id="clock">--:--:--</b></div>
+        <div class="chip"><small>SESSION</small><b id="sessChip">—</b></div>
+        <div class="chip ink" id="modeChip">PAPER</div>
+      </div>
+    </header>
+
+    <nav class="subtabs" id="subTabs" aria-label="Pages"></nav>
+
+    <div class="strip" id="strip">
+      <span class="gate" id="stripGate">FREE DATA</span>
+      <span id="stripQuotes">quotes …</span>
+      <span id="stripFeed">Angel idle</span>
+      <span class="ink" id="stripMode">PAPER ONLY</span>
+    </div>
+
+    <main id="view" tabindex="-1"></main>
+
+    <footer class="foot mono tiny dim">
+      <span>nse-engine · crypto-style portal · yfinance free poll</span>
+      <a href="keys">Keys (DB)</a>
+    </footer>
+  </div>
+
+  <script src="static/nav.js"></script>
+  <script src="static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "as_of": "2026-10-23",
+  "source_url": "https://www.angelone.in/brokerage-charges (confirm with calculator screenshots in P2)",
+  "verified_against_calculator": false,
+  "mis": {
+    "brokerage_flat_inr": 20.0,
+    "brokerage_pct": 0.1,
+    "stt_sell_pct": 0.025,
+    "stt_buy_pct": 0.0,
+    "exchange_pct": 0.00297,
+    "sebi_pct": 0.0001,
+    "stamp_buy_pct": 0.003,
+    "gst_pct": 18.0,
+    "dp_inr": 0.0
+  },
+  "cnc": {
+    "brokerage_flat_inr": 20.0,
+    "brokerage_pct": 0.1,
+    "stt_sell_pct": 0.1,
+    "stt_buy_pct": 0.1,
+    "exchange_pct": 0.00297,
+    "sebi_pct": 0.0001,
+    "stamp_buy_pct": 0.015,
+    "gst_pct": 18.0,
+    "dp_inr": 20.0,
+    "dp_gst_pct": 18.0
+  },
+  "slippage_pct_mis": 0.03,
+  "slippage_pct_cnc": 0.05
+}

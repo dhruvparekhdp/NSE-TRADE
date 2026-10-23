@@ -1,0 +1,27 @@
+[project]
+name = "nse-engine"
+version = "0.0.1"
+description = "NSE equity engine on Angel One SmartAPI (paper-first)"
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"web/keys.py" = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
+]

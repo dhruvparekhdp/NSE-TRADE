@@ -1,0 +1,17 @@
+[Unit]
+Description=NSE equity engine
+After=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nse-engine
+ExecStart=/home/ubuntu/nse-engine/.venv/bin/python -m engine.runner
+Restart=on-failure
+RestartSec=10
+MemoryMax=600M
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/ubuntu/nse-engine
+EnvironmentFile=/home/ubuntu/nse-engine/.env
+
+[Install]
+WantedBy=multi-user.target
