@@ -46,13 +46,13 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V2-1 | todo | | daily fills / gap stop / trail |
-| V2-2 | todo | | intraday stops both sides + targets |
-| V2-3 | todo | | BarView timeframe close |
-| V2-4 | todo | | real mirror/random baselines |
-| V2-5 | todo | | portfolio backtest |
-| V2-6 | todo | | evaluate halves + ledger columns |
-| V2-7 | todo | | core/exits.py shared engine |
+| V2-1 | done | e5e8421 | daily fills / gap stop / trail |
+| V2-2 | done | e5e8421 | intraday stops both sides + targets |
+| V2-3 | done | e5e8421 | BarView timeframe close |
+| V2-4 | done | e5e8421 | real mirror/random baselines |
+| V2-5 | done | e5e8421 | portfolio backtest |
+| V2-6 | done | e5e8421 | evaluate halves + ledger columns |
+| V2-7 | done | e5e8421 | core/exits.py shared engine |
 
 ## V3 — research (`feat/v3-research`)
 

@@ -13,15 +13,39 @@ class LookaheadError(Exception):
     """Raised when a strategy asks for a bar that has not closed yet."""
 
 
+def _timeframe_ms(timeframe: str) -> int:
+    """Bar length in ms. Daily uses session close, not +60s (PLAN_V2 V2-3 / B13)."""
+    tf = (timeframe or "1m").lower()
+    if tf in {"1d", "d", "day", "daily"}:
+        return 6 * 3600 * 1000  # 09:15→~15:15 continuous; caller may pass session end
+    if tf.endswith("m"):
+        return int(tf[:-1] or "1") * 60_000
+    if tf.endswith("h"):
+        return int(tf[:-1] or "1") * 3_600_000
+    return 60_000
+
+
 @dataclass
 class BarView:
-    """Only exposes bars with ts_ms < decision_ms (strictly before decision)."""
+    """Only exposes bars that have closed by decision_ms (PLAN_V2 V2-3)."""
 
     bars: list[Bar]
     decision_ms: int
+    timeframe: str = "1m"
 
     def closed(self) -> list[Bar]:
-        return [b for b in self.bars if b.ts_ms + 60_000 <= self.decision_ms]
+        width = _timeframe_ms(self.timeframe)
+        daily = self.timeframe.lower() in {"1d", "d", "day", "daily"}
+        out: list[Bar] = []
+        for b in self.bars:
+            close_ms = b.ts_ms + width
+            if close_ms > self.decision_ms:
+                # Daily: asking while the session is still open is a lookahead error (V2-3)
+                if daily and b.ts_ms <= self.decision_ms:
+                    raise LookaheadError(f"daily bar {b.ts_ms} not closed at {self.decision_ms}")
+                continue
+            out.append(b)
+        return out
 
     def at(self, index: int) -> Bar:
         closed = self.closed()

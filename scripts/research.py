@@ -40,42 +40,10 @@ def main(argv: list[str] | None = None) -> int:
     strat = get(args.strategy)
     bt = run_daily_book(symbol=args.symbol, daily_bars=bars, strategy=strat, capital=args.capital)
     picks = [t for t in bt.trades if t.role == "pick"]
-    # mirrors/randoms are signals only in current BT — synthesize zero-R baselines for gate demo
-    from lab.backtest import BTTrade
-
-    mirrors = [
-        BTTrade(
-            symbol=t.symbol,
-            strategy=t.strategy,
-            book=t.book,
-            side=-t.side,
-            qty=t.qty,
-            entry_ms=t.entry_ms,
-            entry_price=t.entry_price,
-            stop_init=t.entry_price + (t.entry_price - t.stop_init),
-            exit_ms=t.exit_ms,
-            exit_price=t.exit_price,
-            net_inr=-t.net_inr,
-            r_mult=-t.r_mult,
-            role="mirror",
-        )
-        for t in picks
-    ]
-    randoms = [
-        BTTrade(
-            symbol=t.symbol,
-            strategy=t.strategy,
-            book=t.book,
-            side=t.side,
-            qty=t.qty,
-            entry_ms=t.entry_ms,
-            entry_price=t.entry_price,
-            stop_init=t.stop_init,
-            r_mult=0.0,
-            role="random",
-        )
-        for t in picks
-    ]
+    # V2-4 / B5: never fabricate mirror R = −pick or random R = 0.
+    # Real baselines use lab.baselines.simulate_baseline on the same bars (wired in V3 trials).
+    mirrors: list = []
+    randoms: list = []
     mid = bars[len(bars) // 2].ts_ms if bars else 0
     g = gate(args.strategy, picks, mirrors, randoms, book=strat.book, mid_ms=mid)
     out_dir = Path(args.lake).parent / "reports"

@@ -56,8 +56,8 @@ def test_migration_003_creates_opening_tables_and_is_idempotent(conn):
         "opening_summary", "morning_brief", "sentiment_daily",
     ):
         assert t in names
-    assert state.migrate(conn) == 3
-    assert state.migrate(conn) == 3
+    assert state.migrate(conn) >= 3  # 003_opening; later phases may add 004+
+    assert state.migrate(conn) >= 3
 
 
 def test_migrate_applies_a_lower_numbered_file_added_later(tmp_path, monkeypatch):
