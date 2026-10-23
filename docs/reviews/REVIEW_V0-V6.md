@@ -53,15 +53,15 @@ bypassed with one header. And PROGRESS marks as "done" tickets whose files were 
 
 ## 4. Process note
 
-At 19:32:13 IST, `main` was fast-forwarded to the whole V0–V6 stack and pushed (reflog: `merge origin/feat/v6-intraday-shadow`),
-4 s after Claude's docs commit on the feature branch. That skips the review-then-merge rule in AGENTS.md §1 and
-PLAN_V2 §9. No deploy ran (only CI); the server's `~/nse-engine` isn't a git checkout. Fixes below should go on a new
-branch from `main` with a PR, reviewed before merge.
+The owner merged the V0–V6 stack into `main` and pushed it at 19:32 IST (confirmed by the owner, 23 Oct 2026), and
+keeps `main` as is. No deploy ran (only CI); the server's `~/nse-engine` isn't a git checkout. All fixes go on
+`feat/v-fix-1` from `main`, with a PR reviewed by Claude before the owner merges.
 
 ## 5. Prompt for Cursor (fix round)
 
 ```
-Read AGENTS.md, docs/PLAN_V2.md and docs/reviews/REVIEW_V0-V6.md. Branch feat/v-fix-1 from main. Fix findings in this
+git fetch && git checkout main && git pull && git checkout -b feat/v-fix-1 && git merge --no-edit origin/feat/review-v0-v6
+(that brings in this review file). Read AGENTS.md, docs/PLAN_V2.md and docs/reviews/REVIEW_V0-V6.md. Fix findings in this
 order, test first for each (the probes in the review are the test cases), one commit per finding "R3: ...", ruff + pytest
 green, update PROGRESS.md HONESTLY (done / partial / not started, with what is missing). Never push or merge main.
 
