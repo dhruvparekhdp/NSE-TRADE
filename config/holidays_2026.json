@@ -24,11 +24,12 @@
     {
       "date": "2026-11-08",
       "name": "Diwali Laxmi Pujan — Muhurat trading",
-      "note": "Sunday session; exact IST window TBD by NSE circular. Placeholder 18:15-19:15 until notified.",
-      "open": "18:15",
-      "close": "19:15",
-      "no_entry_after": "19:00",
-      "square_off_at": "19:10"
+      "note": "Afternoon Muhurat (MARKET_INDIA §2); VERIFY exact CAS end against NSE circular.",
+      "open": "14:20",
+      "close": "15:15",
+      "no_entry_after": "14:20",
+      "square_off_at": "15:10",
+      "verified_by_owner": false
     }
   ],
   "weekend_named_holidays": [

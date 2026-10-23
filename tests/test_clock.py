@@ -28,19 +28,20 @@ def test_known_holiday_republic_day():
 
 
 def test_normal_day_session_transitions():
-    # Wednesday 2026-10-21 (not a holiday)
+    # Wednesday 2026-10-21 (not a holiday) — F&O CAS regime (cont ends 15:15)
     assert session_state(_ms(2026, 10, 21, 8, 59)) == SessionState.CLOSED
     assert session_state(_ms(2026, 10, 21, 9, 0)) == SessionState.PRE_OPEN
     assert session_state(_ms(2026, 10, 21, 9, 15)) == SessionState.OPEN
     assert session_state(_ms(2026, 10, 21, 14, 45)) == SessionState.NO_NEW_ENTRIES
     assert session_state(_ms(2026, 10, 21, 15, 5)) == SessionState.SQUARE_OFF
-    assert session_state(_ms(2026, 10, 21, 15, 30)) == SessionState.CLOSED
+    assert session_state(_ms(2026, 10, 21, 15, 20)) == SessionState.CLOSING_AUCTION
+    assert session_state(_ms(2026, 10, 21, 15, 40)) == SessionState.CLOSED
 
 
 def test_muhurat_special_session():
-    # Sunday 2026-11-08 Muhurat placeholder 18:15-19:15
-    assert session_state(_ms(2026, 11, 8, 18, 30)) == SessionState.MUHURAT
-    assert session_state(_ms(2026, 11, 8, 19, 10)) == SessionState.SQUARE_OFF
+    # Sunday 2026-11-08 afternoon Muhurat (MARKET_INDIA §2)
+    assert session_state(_ms(2026, 11, 8, 14, 30)) == SessionState.MUHURAT
+    assert session_state(_ms(2026, 11, 8, 15, 10)) == SessionState.SQUARE_OFF
     assert session_state(_ms(2026, 11, 8, 12, 0)) == SessionState.CLOSED
 
 
