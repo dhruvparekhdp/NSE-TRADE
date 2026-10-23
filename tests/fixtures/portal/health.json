@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "mode": "paper",
+  "live_orders": false,
+  "kill_switch": false,
+  "session_state": "OPEN",
+  "login_ok": true,
+  "ws_connected": false,
+  "last_tick_age_s": null,
+  "open_positions": 1,
+  "angel_configured": true,
+  "configured": true,
+  "status": "ok",
+  "jobs": [
+    {
+      "id": "eod",
+      "next_run_ms": 1792750500000,
+      "last_run_ms": 1792664100000,
+      "last_ok": true,
+      "result": "ok"
+    }
+  ],
+  "memory_mb": 180.0,
+  "memory_limit_mb": 600,
+  "sources": [
+    {
+      "id": "quotes",
+      "label": "Quotes (Yahoo chart API, delayed)",
+      "ok": true,
+      "age_s": 40,
+      "detail": "20 symbols"
+    }
+  ]
+}

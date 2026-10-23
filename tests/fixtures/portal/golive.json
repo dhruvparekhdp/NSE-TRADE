@@ -1,0 +1,11 @@
+{
+  "verdict": "NOT READY",
+  "gates": [
+    {
+      "id": "real_data",
+      "label": "Research data is real, not synthetic",
+      "ok": false,
+      "detail": "no daily bars in the lake yet"
+    }
+  ]
+}

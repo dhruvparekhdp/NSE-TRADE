@@ -1,0 +1,95 @@
+{
+  "trade_date": "2026-10-23",
+  "phase": "day",
+  "brief": {
+    "gift_nifty": {
+      "chg_pct": 0.3,
+      "ts_ms": 1792729800000
+    },
+    "us": [
+      {
+        "key": "SPX",
+        "label": "S&P 500",
+        "chg_pct": 0.4
+      }
+    ],
+    "europe": [
+      {
+        "key": "DAX",
+        "label": "DAX",
+        "chg_pct": -0.2
+      }
+    ],
+    "asia": [
+      {
+        "key": "N225",
+        "label": "Nikkei",
+        "chg_pct": 0.1
+      }
+    ],
+    "fx_commod": [
+      {
+        "key": "BRENT",
+        "label": "Brent",
+        "chg_pct": 1.1
+      }
+    ],
+    "fii_net_cr": -1250.0,
+    "dii_net_cr": 1810.0,
+    "india_vix": 13.4,
+    "top_headlines": [
+      {
+        "title": "RBI holds repo rate",
+        "event_type": "india_macro"
+      }
+    ],
+    "results_today": [
+      "TCS"
+    ],
+    "events_today": [
+      "F&O expiry"
+    ],
+    "composite": 0.12,
+    "built_ms": 1792725300000
+  },
+  "preopen": {
+    "nifty": {
+      "iep": 24500.0,
+      "chg_pct": 0.3,
+      "imbalance": 0.1
+    },
+    "snapshots_n": 30,
+    "last_ms": 1792726680000,
+    "movers": [
+      {
+        "symbol": "ADANIENT",
+        "iep": 2410.0,
+        "chg_pct": 1.4,
+        "imbalance": 0.22
+      }
+    ]
+  },
+  "scorecard": {
+    "nifty_gap_pct": 0.3,
+    "gap_filled_ms": null,
+    "or15": [
+      24480.0,
+      24560.0
+    ],
+    "breadth": {
+      "adv": 31,
+      "dec": 18
+    },
+    "first5_vol_x": 1.3,
+    "open_type": null
+  },
+  "history": [
+    {
+      "trade_date": "2026-10-22",
+      "nifty_gap_pct": -0.1,
+      "imbalance": -0.05,
+      "open_type": "flat",
+      "open_to_close_pct": 0.2
+    }
+  ]
+}

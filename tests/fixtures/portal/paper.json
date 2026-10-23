@@ -1,0 +1,63 @@
+{
+  "enabled": true,
+  "running": true,
+  "cycle": {
+    "id": 1,
+    "started_ms": 1790825400000,
+    "starting_wallet": 100000.0,
+    "target_wallet": null,
+    "wallet": 97000.0,
+    "peak_wallet": 101000.0
+  },
+  "equity": 101450.0,
+  "unrealised": 427.5,
+  "positions": [
+    {
+      "trade_id": 7,
+      "symbol": "RELIANCE",
+      "strategy": "S6_swing",
+      "book": "B",
+      "qty": 15,
+      "entry": 1402.5,
+      "stop_init": 1340.0,
+      "stop_now": 1362.5,
+      "mark": 1431.0,
+      "r_now": 0.46,
+      "unrealised_inr": 427.5,
+      "sessions_held": 4,
+      "sessions_left": 16,
+      "entry_ms": 1792381500000
+    }
+  ],
+  "summary": {
+    "trades": 1,
+    "win_rate_pct": 100.0,
+    "net_pnl": 2150.0,
+    "expectancy_per_trade": 2150.0,
+    "costs": {
+      "brokerage": 40.0,
+      "stt": 61.2,
+      "exchange": 3.9,
+      "sebi": 0.1,
+      "stamp": 18.4,
+      "gst": 7.9,
+      "dp": 15.3,
+      "slippage": 42.0
+    }
+  },
+  "history": [
+    {
+      "trade_id": 3,
+      "symbol": "TCS",
+      "strategy": "S6_swing",
+      "book": "B",
+      "r": 1.8,
+      "net_inr": 2150.0,
+      "costs_inr": 188.0,
+      "exit_reason": "trail",
+      "exit_text": "trailing stop hit",
+      "entry_ms": 1789962300000,
+      "exit_ms": 1791540000000
+    }
+  ]
+}

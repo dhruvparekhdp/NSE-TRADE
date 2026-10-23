@@ -1,0 +1,10 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "ts_ms": 1792729800000,
+      "kind": "setting_changed",
+      "json": "{\"key\": \"max_open_swing\", \"old\": 5, \"new\": 4}"
+    }
+  ]
+}

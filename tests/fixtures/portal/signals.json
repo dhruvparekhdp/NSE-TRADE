@@ -1,0 +1,28 @@
+{
+  "rows": [
+    {
+      "id": 11,
+      "ts_ms": 1792729800000,
+      "symbol": "INFY",
+      "book": "B",
+      "strategy": "S6_swing",
+      "role": "pick",
+      "side": 1,
+      "price": 1510.0,
+      "stop": 1450.0,
+      "target": null,
+      "decision": "skipped",
+      "skip_reason": "max_open_swing",
+      "reason_text": "swing book is full: maximum open positions reached",
+      "virtual_status": "running",
+      "virtual_r": null
+    }
+  ],
+  "refused": [
+    {
+      "reason": "max_open_swing",
+      "reason_text": "swing book is full: maximum open positions reached",
+      "n": 1
+    }
+  ]
+}

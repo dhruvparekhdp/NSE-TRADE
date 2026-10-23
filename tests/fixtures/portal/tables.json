@@ -1,0 +1,13 @@
+{
+  "tables": {
+    "signals": {
+      "count": 1,
+      "rows": [
+        {
+          "id": 11,
+          "symbol": "INFY"
+        }
+      ]
+    }
+  }
+}

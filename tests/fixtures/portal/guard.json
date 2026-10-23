@@ -1,0 +1,33 @@
+{
+  "session": {
+    "state": "OPEN",
+    "stock_class": null,
+    "label": "Market open",
+    "next_change_ms": 1792746900000,
+    "next_label": "no new entries"
+  },
+  "feed": {
+    "last_tick_age_s": 3,
+    "stale": false,
+    "quotes_age_s": 40
+  },
+  "reconcile_faults": [
+    {
+      "trade_date": "2026-10-22",
+      "book": "B",
+      "faults": [
+        "fill_diff"
+      ]
+    }
+  ],
+  "daily_loss_pct": -0.4,
+  "floor_ok": true,
+  "kill_switch": false,
+  "flags": [
+    {
+      "id": "kill_switch",
+      "on": false,
+      "text": "Kill switch is off"
+    }
+  ]
+}

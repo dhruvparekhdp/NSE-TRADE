@@ -1,0 +1,22 @@
+{
+  "mode": "paper",
+  "live_orders": false,
+  "kill_switch": false,
+  "book_a_mode": "shadow",
+  "market_filter": "off",
+  "session": {
+    "state": "OPEN",
+    "stock_class": null,
+    "label": "Market open",
+    "next_change_ms": 1792746900000,
+    "next_label": "no new entries"
+  },
+  "calendar_ok": true,
+  "calendar_year_loaded": 2026,
+  "costs_verified": false,
+  "capital_inr": 100000.0,
+  "squareoff_at": "14:55",
+  "no_entry_after": "14:35",
+  "broker_squareoff_at": "15:10",
+  "version": "0.0.1"
+}

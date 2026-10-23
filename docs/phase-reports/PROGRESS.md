@@ -79,12 +79,12 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V5-1 | todo | | crypto portal shell port |
-| V5-2 | todo | | §7 endpoints + reasons |
-| V5-3 | todo | | Command hub |
-| V5-4 | todo | | Book hub |
-| V5-5 | todo | | Evidence + System |
-| V5-6 | todo | | phone 375px check |
+| V5-1 | done | 62080bd | crypto portal shell port |
+| V5-2 | done | 62080bd | §7 endpoints + reasons |
+| V5-3 | done | 62080bd | Command hub |
+| V5-4 | done | 62080bd | Book hub |
+| V5-5 | done | 62080bd | Evidence + System |
+| V5-6 | done | 62080bd | phone 375px check |
 
 ## V6 — Book A shadow (`feat/v6-intraday-shadow`)
 

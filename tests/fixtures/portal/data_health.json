@@ -1,0 +1,24 @@
+{
+  "lake": {
+    "symbols": 100,
+    "first_date": "2012-01-02",
+    "last_date": "2026-10-22",
+    "missing_days": [
+      "2024-03-04"
+    ],
+    "missing_n": 1,
+    "sources": {
+      "bhav": 100
+    },
+    "synthetic_files": 0
+  },
+  "bhav": {
+    "last_date": "2026-10-22",
+    "format": "UDiFF"
+  },
+  "corp_actions_applied": true,
+  "minutes_today": {
+    "symbols": 100,
+    "rows": 37500
+  }
+}

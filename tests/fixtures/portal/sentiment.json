@@ -1,0 +1,38 @@
+{
+  "composite": 0.12,
+  "label": "neutral",
+  "parts": [
+    {
+      "key": "us_overnight",
+      "label": "US overnight",
+      "value": 0.4,
+      "weight": 0.3,
+      "contribution": 0.12,
+      "ts_ms": 1792729800000,
+      "stale": false
+    }
+  ],
+  "markets": [
+    {
+      "key": "SPX",
+      "label": "S&P 500",
+      "region": "us",
+      "last": 5900.0,
+      "chg_pct": 0.4,
+      "ts_ms": 1792729800000,
+      "stale": false
+    }
+  ],
+  "risk_off_alarm": {
+    "on": false,
+    "since_ms": null,
+    "reasons": []
+  },
+  "timeline": [
+    {
+      "ts_ms": 1792729800000,
+      "nifty_chg_pct": 0.2,
+      "composite": 0.1
+    }
+  ]
+}

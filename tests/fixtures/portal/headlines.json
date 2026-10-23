@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "ts_ms": 1792729800000,
+      "source": "ET Markets",
+      "title": "RBI holds repo rate",
+      "link": "https://example.com/a",
+      "event_type": "india_macro",
+      "symbol": null,
+      "score": 0.1,
+      "nifty_move_next_60m": null
+    }
+  ],
+  "tags": [
+    {
+      "event_type": "india_macro",
+      "n": 1
+    }
+  ]
+}

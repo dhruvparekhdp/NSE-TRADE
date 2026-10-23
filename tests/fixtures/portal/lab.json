@@ -1,0 +1,24 @@
+{
+  "trials_total": 12,
+  "strategies": [
+    {
+      "id": "S6_swing",
+      "book": "B",
+      "last_report": {
+        "ts_ms": 1792729800000,
+        "period": "2012-2026",
+        "data_from": "2012-01-02",
+        "data_to": "2026-10-22",
+        "n": 140,
+        "avg_r": 0.12,
+        "win_pct": 41.0,
+        "passed": false,
+        "post_hoc": false,
+        "report_path": "reports/s6.json"
+      },
+      "trials": 3,
+      "passed": 0,
+      "prereg_id": "PREREG-1"
+    }
+  ]
+}

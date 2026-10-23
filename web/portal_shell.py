@@ -20,7 +20,7 @@ from aiohttp import web
 from yarl import URL
 
 PORTAL_DIR = Path(__file__).resolve().parent / "portal"
-BASE_PATH = "/nse"                    # the public prefix; the server also answers without it
+BASE_PATH = "/nse"  # the public prefix; the server also answers without it
 _TYPES = {".js": "application/javascript", ".css": "text/css"}
 _PLACEHOLDER = re.compile(r"\{\{asset:([\w./-]+)\}\}")
 _cache: dict[str, tuple[float, bytes, str]] = {}
@@ -94,7 +94,7 @@ async def handle_prefixed(request: web.Request) -> web.StreamResponse:
     nginx normally strips the prefix; this makes ``http://127.0.0.1:8090/nse/`` (and its POSTs, such as
     ``api/login``) work with no proxy, which is how the portal is developed and tested.
     """
-    path = request.path[len(BASE_PATH):] or "/"
+    path = request.path[len(BASE_PATH) :] or "/"
     clone = request.clone(rel_url=URL(path).with_query(request.rel_url.query_string))
     match = await request.app.router.resolve(clone)
     if match.http_exception is not None:

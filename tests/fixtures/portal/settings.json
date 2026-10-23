@@ -1,0 +1,24 @@
+{
+  "settings": [
+    {
+      "key": "max_open_swing",
+      "kind": "int",
+      "value": 5,
+      "min": 1,
+      "max": 10,
+      "choices": null
+    }
+  ],
+  "derived": {
+    "broker_squareoff_at": "15:10",
+    "squareoff_at": "14:55",
+    "no_entry_after": "14:35"
+  },
+  "session": {
+    "state": "OPEN",
+    "stock_class": null,
+    "label": "Market open",
+    "next_change_ms": 1792746900000,
+    "next_label": "no new entries"
+  }
+}

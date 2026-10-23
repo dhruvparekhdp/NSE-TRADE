@@ -1,0 +1,65 @@
+{
+  "rules": {
+    "timeframe": "1d",
+    "stop": "2.5×ATR14 below entry",
+    "trail": "highest close since entry − 2.5×ATR14, never lowered",
+    "time_limit_sessions": 20,
+    "risk_pct": 1.0,
+    "min_position_inr": 20000.0,
+    "max_open": 5,
+    "market_filter": "off",
+    "vol_rank_max": 0.667,
+    "excluded": []
+  },
+  "open": [
+    {
+      "trade_id": 7,
+      "symbol": "RELIANCE",
+      "strategy": "S6_swing",
+      "book": "B",
+      "qty": 15,
+      "entry": 1402.5,
+      "stop_init": 1340.0,
+      "stop_now": 1362.5,
+      "mark": 1431.0,
+      "r_now": 0.46,
+      "unrealised_inr": 427.5,
+      "sessions_held": 4,
+      "sessions_left": 16,
+      "entry_ms": 1792381500000
+    }
+  ],
+  "closed": {
+    "n": 1,
+    "win_rate": 100.0,
+    "avg_r": 1.8,
+    "total_r": 1.8,
+    "last": [
+      {
+        "trade_id": 3,
+        "symbol": "TCS",
+        "strategy": "S6_swing",
+        "book": "B",
+        "r": 1.8,
+        "net_inr": 2150.0,
+        "costs_inr": 188.0,
+        "exit_reason": "trail",
+        "exit_text": "trailing stop hit",
+        "entry_ms": 1789962300000,
+        "exit_ms": 1791540000000
+      }
+    ]
+  },
+  "takeskip": {
+    "take": {
+      "n": 5,
+      "running": 1,
+      "avg_r": 0.4
+    },
+    "skip": {
+      "n": 3,
+      "running": 0,
+      "avg_r": 0.1
+    }
+  }
+}

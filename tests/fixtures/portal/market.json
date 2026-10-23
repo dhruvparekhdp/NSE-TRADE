@@ -1,0 +1,19 @@
+{
+  "nifty": {
+    "ltp": 24510.4,
+    "chg_pct": 0.31
+  },
+  "india_vix": 13.4,
+  "nifty_vol_rank": 0.42,
+  "nifty_above_200dma": true,
+  "fii_net_cr": -1250.0,
+  "dii_net_cr": 1810.0,
+  "gift_nifty_chg_pct": 0.22,
+  "next_events": [
+    {
+      "kind": "holiday",
+      "date": "2026-11-08",
+      "label": "Diwali Laxmi Pujan"
+    }
+  ]
+}

@@ -31,6 +31,7 @@ class EngineRunner:
         self.scheduler = AsyncIOScheduler(timezone=IST)
         self.telegram = TelegramClient()
         self.app = create_app(db=self.db)
+        self.app["scheduler"] = self.scheduler  # System > Health lists the jobs
         self._runner: web.AppRunner | None = None
         self._stopping = asyncio.Event()
 

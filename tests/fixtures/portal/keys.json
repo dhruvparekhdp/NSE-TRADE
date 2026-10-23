@@ -1,0 +1,27 @@
+{
+  "rows": [
+    {
+      "key": "angel_api_key",
+      "label": "Angel SmartAPI key",
+      "kind": "secret",
+      "is_set": true,
+      "where": "db",
+      "masked": "ab\u2022\u2022\u2022yz",
+      "length": 10,
+      "fingerprint": "0123456789ab",
+      "saved_ms": 1792729800000,
+      "history": [
+        {
+          "masked": "cd\u2022\u2022\u2022wx",
+          "fingerprint": "ba9876543210",
+          "saved_ms": 1792729800000,
+          "saved_by": "portal"
+        }
+      ],
+      "help": ""
+    }
+  ],
+  "encryption": true,
+  "master_key": true,
+  "secure_channel": true
+}

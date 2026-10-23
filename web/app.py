@@ -26,22 +26,38 @@ _require_admin = require_admin
 
 
 async def handle_health(request: web.Request) -> web.Response:
+    from pathlib import Path
+
+    from data.free_quotes import read_quotes_cache
+    from web import portal_data
+
     settings = get_settings()
     clock: Clock = request.app.get("clock", Clock())
-    state = session_state(clock.now_ms())
+    now_ms = clock.now_ms()
+    state = session_state(now_ms)
+    conn = request.app.get("db")
+    quotes = portal_data.build_quotes(read_quotes_cache(Path(settings.data_dir)))
+    login = portal_data.one(conn, "SELECT login_ok FROM sessions ORDER BY trade_date DESC LIMIT 1")
+    login_ok = bool(login and login["login_ok"])
+    open_n = portal_data.one(conn, "SELECT COUNT(*) AS n FROM trades WHERE status='open'") or {}
     body: dict[str, Any] = {
         "ok": True,
         "mode": settings.mode,
         "live_orders": bool(get_setting("live_orders", settings.live_orders)),
         "kill_switch": bool(get_setting("kill_switch", settings.kill_switch)),
         "session_state": state.value,
-        "login_ok": False,
+        "login_ok": login_ok,
         "ws_connected": False,
         "last_tick_age_s": None,
-        "open_positions": 0,
+        "open_positions": int(open_n.get("n") or 0),
         "angel_configured": settings.angel_configured,
         "configured": settings.angel_configured,
         "status": "ok" if settings.angel_configured else "not configured",
+        # System > Health page (PLAN_V2 section 8)
+        "jobs": portal_data.job_rows(conn, request.app.get("scheduler")),
+        "memory_mb": portal_data.memory_mb(),
+        "memory_limit_mb": 600,
+        "sources": portal_data.source_rows(quotes, settings.angel_configured, login_ok, now_ms),
     }
     return web.json_response(body)
 
@@ -98,18 +114,6 @@ async def handle_kill(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "kill_switch": on})
 
 
-async def handle_lab(request: web.Request) -> web.Response:
-    """Latest lab_trials rows for the Lab page (plan A13)."""
-    conn = request.app.get("db")
-    if conn is None:
-        return web.json_response({"trials": [], "count": 0})
-    rows = conn.execute(
-        "SELECT id, ts_ms, strategy, n, avg_r, win_pct, passed, report_path FROM lab_trials ORDER BY id DESC LIMIT 50"
-    ).fetchall()
-    trials = [dict(r) for r in rows]
-    return web.json_response({"trials": trials, "count": len(trials)})
-
-
 async def handle_books(request: web.Request) -> web.Response:
     conn = request.app.get("db")
     empty = {"A": {"trades": 0, "avg_r": 0.0}, "B": {"trades": 0, "avg_r": 0.0}}
@@ -131,7 +135,6 @@ def create_app(*, db: Any = None, clock: Clock | None = None) -> web.Application
         app["db"] = db
     app["clock"] = clock or Clock()
     app.router.add_get("/api/health", handle_health)
-    app.router.add_get("/api/lab", handle_lab)
     app.router.add_get("/api/books", handle_books)
     app.router.add_post("/api/login", handle_login)
     app.router.add_post("/api/kill", handle_kill)
