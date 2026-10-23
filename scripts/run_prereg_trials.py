@@ -11,8 +11,10 @@ import json
 from pathlib import Path
 
 from config.paths import engine_db_path, lake_dir
+from core.exits import ExitRules
 from data.lake import Lake
 from lab.backtest import run_daily_book
+from lab.baselines import simulate_baselines_from_signals
 from lab.evaluate import gate
 from lab.ledger import connect, data_hash_for, record_trial, trial_count
 from strategies.registry import ALL, get
@@ -51,6 +53,9 @@ def run_one(prereg_id: str, strategy_id: str, lake: Lake, symbols: list[str], db
             "n": 0,
         }
     picks = []
+    mirrors = []
+    randoms = []
+    rules = ExitRules(product="CNC")
     for sym in symbols:
         daily = lake.read_daily(sym)
         if daily is None or getattr(daily, "empty", True):
@@ -58,9 +63,11 @@ def run_one(prereg_id: str, strategy_id: str, lake: Lake, symbols: list[str], db
         bars = bars_from_daily_df(daily.to_dict(orient="records"))
         bt = run_daily_book(symbol=sym, daily_bars=bars, strategy=strat, capital=100_000.0)
         picks.extend([t for t in bt.trades if t.role == "pick"])
+        m, r = simulate_baselines_from_signals(bt.signals, bars, rules)
+        mirrors.extend(m)
+        randoms.extend(r)
     mid = _mid_ms([t for t in picks]) if picks else 0
-    # Baselines empty until simulated — gate will fail mirror/random honestly
-    g = gate(strategy_id, picks, [], [], book="B", mid_ms=mid or 1)
+    g = gate(strategy_id, picks, mirrors, randoms, book="B", mid_ms=mid or 1)
     payload = {
         "prereg_id": prereg_id,
         "strategy": strategy_id,

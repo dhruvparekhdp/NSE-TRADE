@@ -51,6 +51,11 @@ def gate(
     m1, m2 = split_by_date(mirrors, mid_ms)
     r1, r2 = split_by_date(randoms, mid_ms)
     reasons: list[str] = []
+    # R4 / B5: empty baselines must not silently look like avg R = 0 (beating them is free).
+    if not mirrors:
+        reasons.append("empty_mirrors")
+    if not randoms:
+        reasons.append("empty_randoms")
     avg1, avg2 = _avg_r(first), _avg_r(second)
     if avg1 < 0.10:
         reasons.append("avg_r_first")
@@ -60,17 +65,17 @@ def gate(
         reasons.append("n_first")
     if len(second) < min_n:
         reasons.append("n_second")
-    beat_m1 = avg1 > _avg_r(m1)
-    beat_m2 = avg2 > _avg_r(m2)
-    beat_r1 = avg1 > _avg_r(r1)
-    beat_r2 = avg2 > _avg_r(r2)
-    if not beat_m1:
+    beat_m1 = bool(mirrors) and avg1 > _avg_r(m1)
+    beat_m2 = bool(mirrors) and avg2 > _avg_r(m2)
+    beat_r1 = bool(randoms) and avg1 > _avg_r(r1)
+    beat_r2 = bool(randoms) and avg2 > _avg_r(r2)
+    if mirrors and not beat_m1:
         reasons.append("mirror_first")
-    if not beat_m2:
+    if mirrors and not beat_m2:
         reasons.append("mirror_second")
-    if not beat_r1:
+    if randoms and not beat_r1:
         reasons.append("random_first")
-    if not beat_r2:
+    if randoms and not beat_r2:
         reasons.append("random_second")
     # cost stress: haircut net by 1.5x costs → approx scale R by costs ratio
     stressed = []

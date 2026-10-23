@@ -10,8 +10,10 @@ import json
 from pathlib import Path
 
 from config.paths import engine_db_path, lake_dir
+from core.exits import ExitRules
 from data.lake import Lake
 from lab.backtest import run_daily_book
+from lab.baselines import simulate_baselines_from_signals
 from lab.evaluate import gate
 from lab.ledger import connect, record_trial, trial_count
 from strategies.registry import get
@@ -40,10 +42,10 @@ def main(argv: list[str] | None = None) -> int:
     strat = get(args.strategy)
     bt = run_daily_book(symbol=args.symbol, daily_bars=bars, strategy=strat, capital=args.capital)
     picks = [t for t in bt.trades if t.role == "pick"]
-    # V2-4 / B5: never fabricate mirror R = −pick or random R = 0.
-    # Real baselines use lab.baselines.simulate_baseline on the same bars (wired in V3 trials).
-    mirrors: list = []
-    randoms: list = []
+    # R4 / B5: simulate mirror + random on the same bars — never empty-lists-as-zero.
+    mirrors, randoms = simulate_baselines_from_signals(
+        bt.signals, bars, ExitRules(product="CNC")
+    )
     mid = bars[len(bars) // 2].ts_ms if bars else 0
     g = gate(args.strategy, picks, mirrors, randoms, book=strat.book, mid_ms=mid)
     out_dir = Path(args.lake).parent / "reports"

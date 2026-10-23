@@ -65,3 +65,24 @@ def gate_beats(
 def deterministic_seed(*parts: str) -> int:
     h = hashlib.sha256("|".join(parts).encode()).hexdigest()
     return int(h[:8], 16)
+
+
+def simulate_baselines_from_signals(
+    signals: Iterable[Signal],
+    bars: list[Bar],
+    rules: ExitRules | None = None,
+) -> tuple[list[BTTrade], list[BTTrade]]:
+    """Run mirror + random signals through the shared exit engine (review R4)."""
+    rules = rules or ExitRules(product="CNC")
+    mirrors: list[BTTrade] = []
+    randoms: list[BTTrade] = []
+    for sig in signals:
+        if sig.role == "mirror":
+            t = simulate_baseline(sig, bars, rules)
+            if t is not None:
+                mirrors.append(t)
+        elif sig.role == "random":
+            t = simulate_baseline(sig, bars, rules)
+            if t is not None:
+                randoms.append(t)
+    return mirrors, randoms
