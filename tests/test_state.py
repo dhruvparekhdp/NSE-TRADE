@@ -17,7 +17,7 @@ def test_migrate_empty_and_idempotent(tmp_path):
     conn = init_db(db)
     v1 = migrate(conn)
     v2 = migrate(conn)
-    assert v1 == v2 == 4  # 001 + 003_opening + 004_lab_trials (002 reserved for V4)
+    assert v1 == v2 == 4  # 001–004 (002 paper + 003 opening + 004 lab_trials)
     tables = {
         r[0]
         for r in conn.execute(

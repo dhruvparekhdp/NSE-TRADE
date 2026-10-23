@@ -66,14 +66,14 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V4-1 | todo | | migration 002 |
-| V4-2 | todo | | quotes Angel+Yahoo |
-| V4-3 | todo | | PaperBroker accounting |
-| V4-4 | todo | | outcomes + take/skip |
-| V4-5 | todo | | Broker protocol + watchdog |
-| V4-6 | todo | | paper_engine e2e parity |
-| V4-7 | todo | | Telegram alerts |
-| V4-8 | todo | | parity job |
+| V4-1 | done | 87f27ea | migration 002 |
+| V4-2 | done | 87f27ea | quotes Angel+Yahoo |
+| V4-3 | done | 87f27ea | PaperBroker accounting |
+| V4-4 | done | 87f27ea | outcomes + take/skip |
+| V4-5 | done | 87f27ea | Broker protocol + watchdog |
+| V4-6 | done | 87f27ea | paper_engine e2e parity |
+| V4-7 | done | 87f27ea | Telegram alerts |
+| V4-8 | done | 87f27ea | parity job |
 
 ## V5 — portal (`feat/v5-portal`)
 

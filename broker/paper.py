@@ -129,39 +129,69 @@ class PaperBroker:
         }
 
     def _apply_fill(self, order: PaperOrder) -> None:
+        """Update positions and cash. MIS closes release margin + realised P&L − costs (B7)."""
         signed = order.qty if order.side == "BUY" else -order.qty
         key = f"{order.symbol}:{order.product}"
         pos = self.positions.get(key)
-        notional = order.qty * (order.avg_price or 0.0)
-        if order.product == "INTRADAY":
+        px = order.avg_price or 0.0
+        notional = order.qty * px
+
+        # CNC: no short entry; buy needs cash
+        if order.product == "DELIVERY" and order.purpose == "entry" and order.side == "SELL":
+            order.status = "REJECTED"
+            order.filled_qty = 0
+            order.avg_price = None
+            return
+        if order.product == "DELIVERY" and order.side == "BUY" and order.purpose == "entry":
+            est_cost = self.round_trip_costs(notional, notional, "DELIVERY") * 0.5
+            if notional + est_cost > self.cash:
+                order.status = "REJECTED"
+                order.filled_qty = 0
+                order.avg_price = None
+                return
+
+        if order.product == "INTRADAY" and order.purpose == "entry" and pos is None:
             margin = notional * self.mis_margin_pct / 100.0
-            if order.side == "BUY" or (pos is None):
-                if margin > self.cash and order.purpose == "entry":
-                    order.status = "REJECTED"
-                    order.filled_qty = 0
-                    return
+            if margin > self.cash:
+                order.status = "REJECTED"
+                order.filled_qty = 0
+                order.avg_price = None
+                return
+
         if pos is None:
             self.positions[key] = PaperPosition(
                 symbol=order.symbol,
                 product=order.product,
                 qty=signed,
-                avg_price=order.avg_price or 0.0,
+                avg_price=px,
                 side=1 if signed > 0 else -1,
             )
             if order.purpose == "entry":
-                self.cash -= notional if order.product == "DELIVERY" else notional * self.mis_margin_pct / 100.0
-        else:
-            # reduce / flip
-            new_qty = pos.qty + signed
-            if new_qty == 0:
-                del self.positions[key]
                 if order.product == "DELIVERY":
-                    self.cash += notional
+                    self.cash -= notional
                 else:
-                    self.cash += abs(pos.qty) * pos.avg_price * self.mis_margin_pct / 100.0
+                    self.cash -= notional * self.mis_margin_pct / 100.0
+            return
+
+        new_qty = pos.qty + signed
+        if new_qty == 0:
+            # flat: realise P&L
+            if pos.side > 0:
+                pnl = (px - pos.avg_price) * abs(pos.qty)
+                buy_v, sell_v = pos.avg_price * abs(pos.qty), px * abs(pos.qty)
             else:
-                pos.qty = new_qty
-                pos.side = 1 if new_qty > 0 else -1
+                pnl = (pos.avg_price - px) * abs(pos.qty)
+                buy_v, sell_v = px * abs(pos.qty), pos.avg_price * abs(pos.qty)
+            costs = self.round_trip_costs(buy_v, sell_v, order.product)
+            if order.product == "DELIVERY":
+                self.cash += notional - costs
+            else:
+                margin = abs(pos.qty) * pos.avg_price * self.mis_margin_pct / 100.0
+                self.cash += margin + pnl - costs
+            del self.positions[key]
+        else:
+            pos.qty = new_qty
+            pos.side = 1 if new_qty > 0 else -1
 
     def place_order(self, **kwargs: Any) -> PaperOrder:
         if not self.session_open and kwargs.get("purpose") == "entry":
