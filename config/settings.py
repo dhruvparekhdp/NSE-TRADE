@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     max_position_pct_capital: float = 300.0
     max_mis_exposure_x: float = 3.0
     max_open_intraday: int = 3
-    max_open_swing: int = 5
+    max_open_swing: int = 4  # R2: ₹25k slots at ₹1L so CNC ₹20k floor clears after floor(qty)
     daily_loss_limit_pct: float = 2.0
     floor_pct: float = 80.0
 

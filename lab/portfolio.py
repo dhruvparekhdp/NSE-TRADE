@@ -89,6 +89,8 @@ def run_portfolio_daily(
                 continue
             sz = size(fill.price, pe.signal.stop, state.capital, limits.risk_per_trade_pct, 0.05, "B", limits)
             if sz.qty <= 0:
+                pe.signal.features = {**(pe.signal.features or {}), "skip_reason": sz.reason}
+                result.signals.append(pe.signal)
                 continue
             open_pos[sym] = Position(
                 symbol=sym,

@@ -1,7 +1,8 @@
-"""Sizing and entry gates — pure (plan A9.3 / P2-3)."""
+"""Sizing and entry gates — pure (plan A9.3 / P2-3; review R2)."""
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,7 +17,7 @@ class RiskLimits:
     max_position_pct_capital: float = 300.0
     max_mis_exposure_x: float = 3.0
     max_open_intraday: int = 3
-    max_open_swing: int = 5
+    max_open_swing: int = 4  # ₹25k slots at ₹1L so CNC floor clears (R2)
     daily_loss_limit_pct: float = 2.0
     floor_pct: float = 80.0
     max_spread_pct: float = 0.10
@@ -51,6 +52,17 @@ def _floor_qty(raw: float) -> int:
     return max(0, int(raw))
 
 
+def book_b_slot_healthy(
+    capital: float,
+    max_open_swing: int,
+    min_position_cnc_inr: float,
+) -> bool:
+    """False when equal slots cannot clear 1.1× the CNC floor (review R2)."""
+    if max_open_swing <= 0 or capital <= 0 or min_position_cnc_inr <= 0:
+        return False
+    return (capital / max_open_swing) >= 1.1 * min_position_cnc_inr
+
+
 def size(
     entry: float,
     stop: float,
@@ -79,13 +91,20 @@ def size(
             if value < limits.min_position_inr:
                 return SizeResult(0, 0.0, "below_min_position")
     else:
-        if value < limits.min_position_cnc_inr and qty > 0:
-            return SizeResult(0, 0.0, "below_min_cnc_position")
+        # Equal slots; cap risk size to the slot, then meet CNC floor when the slot allows (R2).
         slot = capital / max(1, limits.max_open_swing)
         if value > slot and entry > 0:
             qty = _floor_qty(slot / entry)
             value = qty * entry
-            if value < limits.min_position_cnc_inr:
+        if value < limits.min_position_cnc_inr:
+            if slot + 1e-9 >= limits.min_position_cnc_inr and entry > 0:
+                qty_min = int(math.ceil(limits.min_position_cnc_inr / entry - 1e-12))
+                if qty_min * entry <= slot + 1e-9:
+                    qty = qty_min
+                    value = qty * entry
+                else:
+                    return SizeResult(0, 0.0, "below_min_cnc_position")
+            else:
                 return SizeResult(0, 0.0, "below_min_cnc_position")
     if qty <= 0:
         return SizeResult(0, 0.0, "qty_zero")
@@ -153,7 +172,7 @@ def limits_from_settings(settings: Any) -> RiskLimits:
         max_position_pct_capital=float(getattr(settings, "max_position_pct_capital", 300.0)),
         max_mis_exposure_x=float(getattr(settings, "max_mis_exposure_x", 3.0)),
         max_open_intraday=int(getattr(settings, "max_open_intraday", 3)),
-        max_open_swing=int(getattr(settings, "max_open_swing", 5)),
+        max_open_swing=int(getattr(settings, "max_open_swing", 4)),
         daily_loss_limit_pct=float(getattr(settings, "daily_loss_limit_pct", 2.0)),
         floor_pct=float(getattr(settings, "floor_pct", 80.0)),
         max_spread_pct=float(getattr(settings, "max_spread_pct", 0.10)),

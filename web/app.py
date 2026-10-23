@@ -28,6 +28,7 @@ _require_admin = require_admin
 async def handle_health(request: web.Request) -> web.Response:
     from pathlib import Path
 
+    from core.risk import book_b_slot_healthy
     from data.free_quotes import read_quotes_cache
     from web import portal_data
 
@@ -40,8 +41,14 @@ async def handle_health(request: web.Request) -> web.Response:
     login = portal_data.one(conn, "SELECT login_ok FROM sessions ORDER BY trade_date DESC LIMIT 1")
     login_ok = bool(login and login["login_ok"])
     open_n = portal_data.one(conn, "SELECT COUNT(*) AS n FROM trades WHERE status='open'") or {}
+    slot_ok = book_b_slot_healthy(
+        float(get_setting("capital_inr", settings.capital_inr)),
+        int(get_setting("max_open_swing", settings.max_open_swing)),
+        float(get_setting("min_position_cnc_inr", settings.min_position_cnc_inr)),
+    )
     body: dict[str, Any] = {
-        "ok": True,
+        "ok": slot_ok,
+        "book_b_slot_ok": slot_ok,
         "mode": settings.mode,
         "live_orders": bool(get_setting("live_orders", settings.live_orders)),
         "kill_switch": bool(get_setting("kill_switch", settings.kill_switch)),

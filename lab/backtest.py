@@ -126,7 +126,11 @@ def run_daily_book(
                     limits,
                 )
                 if sz.qty <= 0:
-                    result.no_fills.append(pending)
+                    # R2: size refusal is not a market no_fill — keep the machine reason.
+                    pending.features = {
+                        **(pending.features or {}),
+                        "skip_reason": sz.reason,
+                    }
                     pending = None
                 else:
                     risk_inr = abs(fill.price - pending.stop) * sz.qty

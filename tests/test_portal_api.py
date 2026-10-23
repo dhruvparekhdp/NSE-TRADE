@@ -439,7 +439,7 @@ async def test_settings_are_whitelisted_logged_and_never_touch_live_flags(seeded
     ok = await seeded.post("/api/settings", json={"key": "max_open_swing", "value": 3})
     assert ok.status == 200 and (await ok.json())["value"] == 3
     row = seeded.conn.execute("SELECT json FROM events WHERE kind='setting_changed' ORDER BY id DESC LIMIT 1").fetchone()
-    assert json.loads(row["json"]) == {"key": "max_open_swing", "old": 5, "new": 3}
+    assert json.loads(row["json"]) == {"key": "max_open_swing", "old": 4, "new": 3}
     for key, value in (("live_orders", True), ("mode", "live"), ("market_filter", "nifty_vol"), ("max_open_swing", 99),
                        ("risk_per_trade_pct", 5), ("book_a_mode", "paper"), ("kill_switch", "yes")):
         bad = await seeded.post("/api/settings", json={"key": key, "value": value})
