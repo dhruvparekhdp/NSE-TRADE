@@ -42,12 +42,18 @@ PAGE = """<!DOCTYPE html>
     <p id="login-err" style="color:#f88"></p>
   </div>
   <div id="keys" class="keys-list" hidden></div>
+  <p id="angel-tools" hidden style="margin-top:1.5rem">
+    <button id="test-angel" style="padding:.6rem 1rem;border:0;border-radius:6px;background:#2a5a8c;color:#fff;font-weight:700">Test Angel (read-only)</button>
+    <span id="angel-result" class="help" style="display:block;margin-top:.5rem;color:var(--muted)"></span>
+  </p>
 </main>
 <script>
 async function api(path, body){
   const opts = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {};
   const r = await fetch(path, opts);
   if(r.status===401){ document.getElementById('login').hidden=false; document.getElementById('keys').hidden=true; throw new Error('login'); }
+  if(r.status===429){ throw new Error('rate limited — wait 2 minutes'); }
+  if(!r.ok){ throw new Error('HTTP '+r.status); }
   return r.json();
 }
 document.getElementById('login-btn').onclick = async ()=>{
@@ -57,10 +63,21 @@ document.getElementById('login-btn').onclick = async ()=>{
   document.getElementById('login').hidden=true;
   await render();
 };
+document.getElementById('test-angel').onclick = async ()=>{
+  const el = document.getElementById('angel-result');
+  el.textContent = 'testing…';
+  try{
+    const d = await api('api/keys/test-angel',{});
+    el.textContent = d.ok
+      ? ('OK · cash ₹'+(d.available_cash??'—')+' · holdings '+d.holdings_count+' · '+d.hint)
+      : ('FAIL '+ (d.error_code||'') +' — '+ (d.hint||''));
+  }catch(e){ el.textContent = String(e.message||e); }
+};
 async function render(){
   const data = await api('api/keys');
   const root = document.getElementById('keys');
   root.hidden=false; root.innerHTML='';
+  document.getElementById('angel-tools').hidden=false;
   for(const row of data.rows){
     const el = document.createElement('div'); el.className='key-card';
     el.innerHTML = `<label>${row.label}</label><div class="help">${row.help}</div>
@@ -175,7 +192,10 @@ async def handle_keys_clear(request: web.Request) -> web.Response:
 
 
 def register_keys_routes(app: web.Application) -> None:
+    from web.test_angel import handle_test_angel
+
     app.router.add_get("/keys", handle_keys_page)
     app.router.add_get("/api/keys", handle_keys_api)
     app.router.add_post("/api/keys/save", handle_keys_save)
     app.router.add_post("/api/keys/clear", handle_keys_clear)
+    app.router.add_post("/api/keys/test-angel", handle_test_angel)
