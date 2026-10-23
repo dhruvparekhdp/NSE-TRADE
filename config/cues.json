@@ -1,0 +1,27 @@
+{
+  "as_of": "2026-10-23",
+  "source": "PLAN_V2 V1b-1 / MARKET_INDIA §8b. Yahoo chart API is unofficial: VERIFY symbols and per-symbol delay.",
+  "note": "delay_s widens the stale threshold for feeds Yahoo serves delayed (VERIFY per symbol; all 0 until measured). GIFT Nifty has no free source: gift_nifty_source=none means US futures + Asia are the overnight proxy (Q11).",
+  "instruments": [
+    {"key": "SPX",      "label": "S&P 500",         "region": "us",         "symbol": "^GSPC",     "source": "yahoo", "delay_s": 0},
+    {"key": "NDX",      "label": "Nasdaq Composite","region": "us",         "symbol": "^IXIC",     "source": "yahoo", "delay_s": 0},
+    {"key": "DJI",      "label": "Dow Jones",       "region": "us",         "symbol": "^DJI",      "source": "yahoo", "delay_s": 0},
+    {"key": "ES",       "label": "S&P 500 futures", "region": "us",         "symbol": "ES=F",      "source": "yahoo", "delay_s": 0},
+    {"key": "NQ",       "label": "Nasdaq futures",  "region": "us",         "symbol": "NQ=F",      "source": "yahoo", "delay_s": 0},
+    {"key": "DAX",      "label": "DAX",             "region": "europe",     "symbol": "^GDAXI",    "source": "yahoo", "delay_s": 0},
+    {"key": "FTSE",     "label": "FTSE 100",        "region": "europe",     "symbol": "^FTSE",     "source": "yahoo", "delay_s": 0},
+    {"key": "CAC",      "label": "CAC 40",          "region": "europe",     "symbol": "^FCHI",     "source": "yahoo", "delay_s": 0},
+    {"key": "STOXX50",  "label": "Euro Stoxx 50",   "region": "europe",     "symbol": "^STOXX50E", "source": "yahoo", "delay_s": 0},
+    {"key": "N225",     "label": "Nikkei 225",      "region": "asia",       "symbol": "^N225",     "source": "yahoo", "delay_s": 0},
+    {"key": "HSI",      "label": "Hang Seng",       "region": "asia",       "symbol": "^HSI",      "source": "yahoo", "delay_s": 0},
+    {"key": "KOSPI",    "label": "Kospi",           "region": "asia",       "symbol": "^KS11",     "source": "yahoo", "delay_s": 0},
+    {"key": "USDINR",   "label": "USD/INR",         "region": "fx_commod",  "symbol": "INR=X",     "source": "yahoo", "delay_s": 0},
+    {"key": "DXY",      "label": "US Dollar index", "region": "fx_commod",  "symbol": "DX-Y.NYB",  "source": "yahoo", "delay_s": 0},
+    {"key": "BRENT",    "label": "Brent crude",     "region": "fx_commod",  "symbol": "BZ=F",      "source": "yahoo", "delay_s": 0},
+    {"key": "GOLD",     "label": "Gold",            "region": "fx_commod",  "symbol": "GC=F",      "source": "yahoo", "delay_s": 0},
+    {"key": "US10Y",    "label": "US 10-year yield","region": "fx_commod",  "symbol": "^TNX",      "source": "yahoo", "delay_s": 0},
+    {"key": "NIFTY",    "label": "Nifty 50",        "region": "india",      "symbol": "^NSEI",     "source": "yahoo", "delay_s": 0},
+    {"key": "INDIAVIX", "label": "India VIX",       "region": "india",      "symbol": "^INDIAVIX", "source": "yahoo", "delay_s": 0},
+    {"key": "GIFTNIFTY","label": "GIFT Nifty",      "region": "gift",       "symbol": null,        "source": "gift",  "delay_s": 0}
+  ]
+}

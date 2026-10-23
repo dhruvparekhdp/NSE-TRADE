@@ -17,7 +17,7 @@ def test_migrate_empty_and_idempotent(tmp_path):
     conn = init_db(db)
     v1 = migrate(conn)
     v2 = migrate(conn)
-    assert v1 == v2 == 1
+    assert v1 == v2 == 3  # 001_init + 003_opening (V1b; 002 reserved for V4 paper)
     tables = {
         r[0]
         for r in conn.execute(
@@ -36,6 +36,9 @@ def test_migrate_empty_and_idempotent(tmp_path):
         "lab_trials",
         "parity",
         "schema_version",
+        "morning_brief",
+        "global_cues",
+        "headlines",
     ):
         assert name in tables
     conn.close()

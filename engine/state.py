@@ -33,14 +33,26 @@ def _current_version(conn: sqlite3.Connection) -> int:
     return int(ver["v"]) if ver else 0
 
 
+def _applied_versions(conn: sqlite3.Connection) -> set[int]:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).fetchone()
+    if row is None:
+        return set()
+    return {int(r["version"]) for r in conn.execute("SELECT version FROM schema_version")}
+
+
 def migrate(conn: sqlite3.Connection) -> int:
     """Apply numbered *.sql migrations. Second call is a no-op. Returns version."""
     files = sorted(MIGRATIONS_DIR.glob("*.sql"))
     version = _current_version(conn)
+    applied = _applied_versions(conn)
     for path in files:
         # e.g. 001_init.sql -> 1
         num = int(path.name.split("_", 1)[0])
-        if num <= version:
+        # Track the *set* of applied numbers, not just the max: V1b ships 003 before V4 ships
+        # 002, and a max-based check would silently skip 002 on any database that already has 003.
+        if num in applied:
             continue
         sql = path.read_text(encoding="utf-8")
         conn.executescript(sql)
@@ -49,7 +61,8 @@ def migrate(conn: sqlite3.Connection) -> int:
             (num, int(time.time() * 1000)),
         )
         conn.commit()
-        version = num
+        applied.add(num)
+        version = max(version, num)
     return version
 
 

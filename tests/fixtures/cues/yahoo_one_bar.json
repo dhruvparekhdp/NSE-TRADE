@@ -1,0 +1,43 @@
+{
+ "chart": {
+  "result": [
+   {
+    "meta": {
+     "symbol": "BZ=F",
+     "currency": "USD",
+     "gmtoffset": 0,
+     "regularMarketPrice": 81.5,
+     "regularMarketTime": 1792731600
+    },
+    "timestamp": [
+     1792713600
+    ],
+    "indicators": {
+     "quote": [
+      {
+       "open": [
+        80.0
+       ],
+       "high": [
+        80.0
+       ],
+       "low": [
+        80.0
+       ],
+       "close": [
+        80.0
+       ],
+       "volume": [
+        0,
+        0,
+        0,
+        0
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}

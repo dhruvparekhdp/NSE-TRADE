@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     square_off_at: str = "14:55"
     trade_special_sessions: bool = False  # Muhurat: no new entries (V1-2)
     book_a_mode: Literal["off", "shadow", "paper"] = "shadow"
+    opening_tracker_enabled: bool = True  # D8 — recording only, never a trade filter
+    preopen_snapshot_s: int = 30
+    cues_poll_s: int = 300
+    risk_off_brent_pct: float = 3.0
+    risk_off_vix_pct: float = 10.0
+    risk_off_window_min: int = 120
+    gift_nifty_source: Literal["none", "url", "paid"] = "none"
     max_spread_pct: float = 0.10
     circuit_buffer_pct: float = 2.0
     entry_limit_offset_pct: float = 0.05
@@ -87,6 +94,16 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./var")  # runtime only; Python package `data/` is separate
     database_url: str | None = None  # postgres nse_engine — keys live here
     admin_password: SecretStr | None = None  # bootstrap login; prefer PORTAL_ADMIN_HASH
+
+    # Opening + sentiment recorder (PLAN_V2 D8 / §6). RECORDING AND DISPLAY ONLY:
+    # nothing here may block, size or time a trade until a pre-registered lab trial shows lift.
+    opening_tracker_enabled: bool = True
+    preopen_snapshot_s: int = 30
+    cues_poll_s: int = 300
+    risk_off_brent_pct: float = 3.0
+    risk_off_vix_pct: float = 10.0
+    risk_off_window_min: int = 120
+    gift_nifty_source: Literal["none", "url", "paid"] = "none"  # Q11: proxy until decided
 
     # News / foreign sentiment (owner 2026-10-23) — off until lab proves lift
     news_filter_enabled: bool = False
