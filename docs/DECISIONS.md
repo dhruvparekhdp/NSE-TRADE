@@ -112,3 +112,10 @@ DECISIONS entry say private. Owner was told that pushing publishes the server IP
 HTTP), the server bootstrap script and the blueprint's list of weaknesses (B24), and chose to push anyway.
 Consequence for the plan: V0-2 (portal off plain HTTP; keys only over HTTPS/Tailscale) is urgent, and no secret
 or production data may ever be committed (AGENTS rule 2 applies doubly to a public repo).
+Resolved cause (19:05 IST): owner's Mac login succeeded from Mumbai AND through an SSH tunnel exiting from the Sydney
+server (so location/static IP is not the problem). Saved client code, API key and MPIN match what the owner typed
+(hash compare); the TOTP secret on /keys is the OLD key (the one shown in the owner's first screenshot), while
+TOTP had been re-issued at ~18:05 IST, which invalidated it. Fix: save the current key on /keys. Lesson for V0-8:
+show when TOTP was last re-issued vs saved, and Compare would have caught this in seconds. Also: the SDK printed
+the API key, client ID and MPIN to the owner's terminal on a failed request (V0-7 log fix); owner to clear the
+terminal and rotate the MPIN (and ideally the API key) after the server login works.
