@@ -98,10 +98,6 @@ async def handle_kill(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "kill_switch": on})
 
 
-async def handle_index(_request: web.Request) -> web.Response:
-    return web.FileResponse(STATIC_DIR / "index.html")
-
-
 async def handle_lab(request: web.Request) -> web.Response:
     """Latest lab_trials rows for the Lab page (plan A13)."""
     conn = request.app.get("db")
@@ -139,11 +135,12 @@ def create_app(*, db: Any = None, clock: Clock | None = None) -> web.Application
     app.router.add_get("/api/books", handle_books)
     app.router.add_post("/api/login", handle_login)
     app.router.add_post("/api/kill", handle_kill)
-    app.router.add_get("/", handle_index)
     from web.keys import register_keys_routes
     from web.portal_api import register_portal_routes
+    from web.portal_shell import register_shell_routes
 
     register_keys_routes(app)
     register_portal_routes(app)
     app.router.add_static("/static/", STATIC_DIR, name="static")
+    register_shell_routes(app)  # last: holds the SPA catch-all
     return app

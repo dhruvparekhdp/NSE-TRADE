@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-palette="sage">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/nse/">
+<title>NSE Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{asset:portal.css}}">
+<script>try{var p=localStorage.getItem("nse-palette");if(p)document.documentElement.setAttribute("data-palette",p)}catch(e){}</script>
+<script>window.PORTAL_ASSETS={{assets_json}};</script>
+</head>
+<body>
+<a class="skiplink" href="#view">Skip to content</a>
+<div class="scan" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<div class="tape" aria-label="Prices"><div class="tape-track" id="tape"><span class="dim">no quotes yet</span></div></div>
+
+<div class="wrap">
+  <header class="top">
+    <a class="logo" href="#/command" aria-label="NSE Engine home">
+      <span class="logo-a">NSE/</span><span class="logo-b"><span class="gl" id="logoWord" data-text="COMMAND">COMMAND</span><span class="blink acc">_</span></span>
+    </a>
+    <nav class="tabs" id="hubTabs" aria-label="Hubs"></nav>
+    <div class="chips">
+      <div class="chip"><small>IST</small><b id="clock">--:--:--</b></div>
+      <div class="chip"><small>SESSION</small><b id="sessChip">—</b></div>
+      <div class="chip swatches" role="group" aria-label="Colour theme">
+        <small>THEME</small>
+        <div class="sw-row">
+          <button class="sw" data-p="sage" title="Sage &amp; Lilac" aria-label="Sage and lilac theme"><i style="background:#A9D3B6"></i><i style="background:#B9AAF2"></i></button>
+          <button class="sw" data-p="champagne" title="Champagne &amp; Teal" aria-label="Champagne and teal theme"><i style="background:#E3C58D"></i><i style="background:#6CC9AE"></i></button>
+          <button class="sw" data-p="ice" title="Ice &amp; Peach" aria-label="Ice and peach theme"><i style="background:#94C5F5"></i><i style="background:#EDA982"></i></button>
+          <button class="sw" data-p="lime" title="Classic lime" aria-label="Classic lime theme"><i style="background:#C6F432"></i><i style="background:#9B8CFF"></i></button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="subtabs" id="subTabs" aria-label="Pages in this hub"></nav>
+
+  <div class="strip" id="strip">
+    <span class="gate" id="stripGate">FILTER …</span>
+    <span id="stripOpen">OPEN POSITIONS …</span>
+    <span id="stripRisk">WORST CASE …</span>
+    <span id="stripFeed">FEED …</span>
+    <span class="ink" id="stripMode">PAPER ONLY</span>
+  </div>
+
+  <main id="view" tabindex="-1"></main>
+
+  <footer class="foot mono tiny dim">
+    <span>nse-engine · portal v2 · paper only until the go-live gates pass</span>
+    <a href="keys">Keys</a>
+  </footer>
+</div>
+<script src="{{asset:nav.js}}"></script>
+<script src="{{asset:core.js}}"></script>
+</body>
+</html>

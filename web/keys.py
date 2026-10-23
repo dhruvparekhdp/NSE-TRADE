@@ -207,7 +207,10 @@ def _admin_password_ok(password: str) -> bool:
 
 
 async def handle_keys_page(_request: web.Request) -> web.Response:
-    return web.Response(text=PAGE, content_type="text/html")
+    from web.portal_shell import head_snippet
+
+    # shared portal header + palette (PLAN_V2 V5-1) so /keys is not a dead end
+    return web.Response(text=PAGE.replace("</head>", head_snippet() + "</head>", 1), content_type="text/html")
 
 
 async def handle_keys_api(request: web.Request) -> web.Response:
