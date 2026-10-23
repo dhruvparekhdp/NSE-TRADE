@@ -3,15 +3,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import urllib.request
 
 BASE = os.environ.get("NSE_BASE", "http://127.0.0.1:8090")
 PW = os.environ.get("ADMIN_PASSWORD", "")
-
-
-class Jar(urllib.request.HTTPCookieProcessor):
-    pass
 
 
 def main() -> int:

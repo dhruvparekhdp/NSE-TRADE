@@ -16,7 +16,7 @@ def main() -> int:
         print("install smartapi-python pyotp first", file=sys.stderr)
         return 1
     from config.secrets_loader import apply_db_secrets
-    from config.settings import get_settings, reset_settings_cache
+    from config.settings import get_settings
 
     try:
         applied = apply_db_secrets()
