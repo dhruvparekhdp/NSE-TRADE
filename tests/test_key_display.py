@@ -106,6 +106,7 @@ async def test_reveal_forbidden_over_plain_public_http(tmp_path, monkeypatch):
     monkeypatch.setenv("PORTAL_ADMIN_HASH", hashed)
     monkeypatch.setenv("SESSION_SECRET", "sess")
     monkeypatch.setenv("COOKIE_SECURE", "false")
+    monkeypatch.setenv("TRUSTED_PROXY", "true")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("ANGEL_API_KEY", "supersecretkey99")
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -115,10 +116,11 @@ async def test_reveal_forbidden_over_plain_public_http(tmp_path, monkeypatch):
     await client.start_server()
     try:
         assert (await client.post("/api/login", json={"password": password})).status == 200
+        # Peer is loopback (TestClient); nginx-style http scheme must refuse (R3).
         r = await client.post(
             "/api/keys/reveal",
             json={"key": "angel_api_key", "password": password},
-            headers={"X-Forwarded-For": "203.0.113.9", "X-Forwarded-Proto": "http"},
+            headers={"X-Real-IP": "203.0.113.9", "X-Forwarded-Proto": "http"},
         )
         assert r.status == 403
     finally:
