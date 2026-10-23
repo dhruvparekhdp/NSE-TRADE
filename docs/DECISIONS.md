@@ -119,3 +119,16 @@ TOTP had been re-issued at ~18:05 IST, which invalidated it. Fix: save the curre
 show when TOTP was last re-issued vs saved, and Compare would have caught this in seconds. Also: the SDK printed
 the API key, client ID and MPIN to the owner's terminal on a failed request (V0-7 log fix); owner to clear the
 terminal and rotate the MPIN (and ideally the API key) after the server login works.
+
+## 2026-10-23 — CORRECTION: the Angel AB1050 failures were caused by Claude's test script
+
+Server login now **works** (19:3x IST): login, funds (₹0.89), 3 holdings (value ₹9,323, P&L −₹1,124.20), 0 positions, logout.
+Earlier conclusions in this log ("Angel's side", "old TOTP key", "location") were **wrong**. Root cause: Claude's read-only
+check script copied the server `.env` (which sets `TZ`) into `os.environ` after Python had started. pyotp's first time
+conversion then used the stale timezone and produced a wrong TOTP; the script asked for exactly one code per run, so every
+server attempt sent a wrong code (reproduced with a dummy key: first code wrong, later codes right). The owner's keys were
+correct apart from two bad pastes that were caught before any login (a 6-digit code, a key with a stray symbol).
+The engine itself is not affected today (systemd sets TZ before the process starts), but TOTP must be generated from an
+aware UTC datetime so it can never happen (ticket V0-9). No support email to Angel is needed.
+Still to do (owner): clear the terminal; rotate the MPIN and API key, which were printed to the terminal by the SDK's error log
+during one test, and re-issue the TOTP key, which was shared in chat; save the new values on /keys and run Test Angel once.
