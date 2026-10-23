@@ -29,6 +29,7 @@ class AngelBroker:
         self.refresh: str | None = None
         self.feed_token: str | None = None
         self._last_order_ts = 0.0
+        self._orders_by_tag: dict[str, dict[str, Any]] = {}
         self.settings = get_settings()
 
     def _throttle(self) -> None:
@@ -109,7 +110,50 @@ class AngelBroker:
         if not (s.mode == "live" and s.live_orders):
             raise Rejected("live orders disabled (need mode=live AND live_orders=true)")
 
-    def place_order(self, params: dict[str, Any]) -> dict[str, Any]:
+    def get_order_by_tag(self, client_tag: str) -> dict[str, Any] | None:
+        return self._orders_by_tag.get(client_tag)
+
+    def place_order(
+        self,
+        *,
+        client_tag: str,
+        symbol: str,
+        side: str,
+        qty: int,
+        order_type: str,
+        product: str,
+        purpose: str,
+        price: float | None,
+        trigger: float | None,
+    ) -> dict[str, Any]:
+        """Sync OrderManager surface (B11). Real send only when dual live gate is on."""
+        existing = self._orders_by_tag.get(client_tag)
+        if existing is not None:
+            return existing
+        self._live_guard()
+        self._throttle()
+        assert self.api is not None
+        params = {
+            "variety": "NORMAL",
+            "ordertag": client_tag,
+            "tradingsymbol": symbol,
+            "symboltoken": "",
+            "transactiontype": side,
+            "exchange": "NSE",
+            "ordertype": order_type,
+            "producttype": product,
+            "duration": "DAY",
+            "price": str(price or 0),
+            "triggerprice": str(trigger or 0),
+            "quantity": str(qty),
+            "purpose": purpose,
+        }
+        resp = self.api.placeOrder(params)
+        self._map_error(resp)
+        self._orders_by_tag[client_tag] = resp
+        return resp
+
+    def place_order_raw(self, params: dict[str, Any]) -> dict[str, Any]:
         self._live_guard()
         self._throttle()
         assert self.api is not None
@@ -125,10 +169,12 @@ class AngelBroker:
         self._map_error(resp)
         return resp
 
-    def cancel_order(self, order_id: str, variety: str = "NORMAL") -> dict[str, Any]:
+    def cancel_order(self, client_tag: str, variety: str = "NORMAL") -> dict[str, Any]:
         self._live_guard()
         self._throttle()
         assert self.api is not None
+        stored = self._orders_by_tag.get(client_tag) or {}
+        order_id = stored.get("data", {}).get("orderid") if isinstance(stored.get("data"), dict) else client_tag
         resp = self.api.cancelOrder(order_id, variety)
         self._map_error(resp)
         return resp

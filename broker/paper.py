@@ -237,6 +237,10 @@ class PaperBroker:
             return True
         return False
 
+    def get_order_by_tag(self, client_tag: str) -> PaperOrder | None:
+        """Real tag lookup for OrderManager idempotency (R8 / B10)."""
+        return self.orders.get(client_tag)
+
     def round_trip_costs(self, buy_value: float, sell_value: float, product: Product) -> float:
         prod: Any = "MIS" if product == "INTRADAY" else "CNC"
         rates: CostRates = rates_for(prod)

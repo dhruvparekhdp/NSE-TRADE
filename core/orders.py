@@ -48,6 +48,7 @@ class Bracket:
     target_price: float | None = None
     qty: int = 0
     side: int = 1
+    crossed_since_ms: int | None = None  # B8: continuous crossing timer (R8)
 
 
 @dataclass
@@ -105,10 +106,14 @@ class OrderManager:
             round_sell_limit(target, t) if side > 0 else round_buy_limit(target, t)
         )
         tag = self.next_tag(trade_date, book, strategy_code)
-        # idempotent: if tag already at broker, reuse
+        # B10: idempotent — local book or broker tag lookup before send (R8)
         existing = self.orders_by_tag.get(tag)
         if existing:
             return self.brackets[trade_id]
+        if hasattr(self.broker, "get_order_by_tag") and self.broker.get_order_by_tag(tag):
+            br = self.brackets.get(trade_id)
+            if br:
+                return br
         entry = ManagedOrder(
             client_tag=tag,
             symbol=symbol,
@@ -245,9 +250,12 @@ class OrderManager:
             assert br.stop_trigger is not None
             crossed = (br.side > 0 and ltp <= br.stop_trigger) or (br.side < 0 and ltp >= br.stop_trigger)
             if not crossed:
+                br.crossed_since_ms = None
                 continue
-            # if still open longer than watchdog after cross, force exit
-            age_s = (now_ms - br.stop.placed_ms) / 1000.0
+            if br.crossed_since_ms is None:
+                br.crossed_since_ms = now_ms
+                continue
+            age_s = (now_ms - br.crossed_since_ms) / 1000.0
             if age_s < self.stop_watchdog_s:
                 continue
             self.broker.cancel_order(br.stop.client_tag)
@@ -286,7 +294,31 @@ class OrderManager:
                 if leg and leg.status == "OPEN":
                     self.broker.cancel_order(leg.client_tag)
                     leg.status = "CANCELLED"
-            # protected limit exit left to caller/broker tick
+            if br.entry.status != "FILLED":
+                continue
+            exit_side = "SELL" if br.side > 0 else "BUY"
+            ltp_map = getattr(self.broker, "last_ltp", None)
+            ref = (ltp_map or {}).get(br.symbol) if isinstance(ltp_map, dict) else None
+            ref = ref or br.entry.avg_price or br.entry.price or 0.0
+            if ref <= 0:
+                continue
+            t = tick_for_price(ref)
+            px = round_sell_limit(ref * 0.995, t) if exit_side == "SELL" else round_buy_limit(ref * 1.005, t)
+            tag = br.entry.client_tag + "Q"
+            if hasattr(self.broker, "get_order_by_tag") and self.broker.get_order_by_tag(tag):
+                continue
+            self.broker.place_order(
+                client_tag=tag,
+                symbol=br.symbol,
+                side=exit_side,
+                qty=br.qty,
+                order_type="LIMIT",
+                product=br.entry.product,
+                purpose="square_off",
+                price=px,
+                trigger=None,
+            )
+            self.events.append({"kind": "square_off_exit", "tag": tag, "symbol": br.symbol, "price": px})
 
     def mark_reconcile_fault(self, symbol: str, on: bool = True) -> None:
         if on:
