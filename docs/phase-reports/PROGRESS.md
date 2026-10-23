@@ -12,7 +12,7 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 | V0-1 | done | ea158de | fix 2 ruff F401; MVP PR link |
 | V0-2 | done | 4a22802 | web_host 127.0.0.1; Secure cookie; HTTPS keys gate |
 | V0-3 | done | 123b840 | `x if x is not None else now()` |
-| V0-4 | todo | | core/ticks.py + tick_bands.json |
+| V0-4 | done | pending | core/ticks.py + tick_bands.json |
 | V0-5 | todo | | scripts use settings.data_dir |
 | V0-6 | todo | | Test Angel read-only button + API |
 | V0-7 | todo | | smartapi-python 1.5.5 + real IP/MAC headers |

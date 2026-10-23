@@ -1,0 +1,12 @@
+{
+  "as_of": "2025-04-15",
+  "source": "NSE cash tick revision (MARKET_INDIA §4)",
+  "bands": [
+    {"price_lt": 250, "tick": 0.01},
+    {"price_lt": 1000, "tick": 0.05},
+    {"price_lt": 5000, "tick": 0.10},
+    {"price_lt": 10000, "tick": 0.50},
+    {"price_lt": 20000, "tick": 1.00},
+    {"price_lt": null, "tick": 5.00}
+  ]
+}

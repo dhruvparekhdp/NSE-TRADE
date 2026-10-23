@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from core.ticks import round_buy_limit, round_sell_limit, round_stop_trigger, tick_for_price
+
 Status = Literal["NEW", "SUBMITTED", "OPEN", "PARTIAL", "FILLED", "CANCELLED", "REJECTED", "EXPIRED"]
 
 
@@ -81,6 +83,7 @@ class OrderManager:
         ask: float | None = None,
         bid: float | None = None,
         now_ms: int | None = None,
+        tick: float | None = None,
     ) -> Bracket:
         if symbol in self.reconcile_faults:
             raise RuntimeError(f"reconcile unresolved for {symbol}")
@@ -89,10 +92,18 @@ class OrderManager:
         side_str = "BUY" if side > 0 else "SELL"
         if side > 0:
             ref = ask if ask is not None else entry_ref
-            limit = round(ref * (1 + self.entry_limit_offset_pct / 100.0), 2)
+            raw = ref * (1 + self.entry_limit_offset_pct / 100.0)
+            t = tick if tick is not None else tick_for_price(ref)
+            limit = round_buy_limit(raw, t)
         else:
             ref = bid if bid is not None else entry_ref
-            limit = round(ref * (1 - self.entry_limit_offset_pct / 100.0), 2)
+            raw = ref * (1 - self.entry_limit_offset_pct / 100.0)
+            t = tick if tick is not None else tick_for_price(ref)
+            limit = round_sell_limit(raw, t)
+        stop_trig = round_stop_trigger(stop, side=side, tick=t)
+        tgt = None if target is None else (
+            round_sell_limit(target, t) if side > 0 else round_buy_limit(target, t)
+        )
         tag = self.next_tag(trade_date, book, strategy_code)
         # idempotent: if tag already at broker, reuse
         existing = self.orders_by_tag.get(tag)
@@ -129,17 +140,17 @@ class OrderManager:
             symbol=symbol,
             entry=entry,
             entry_timeout_s=self.entry_timeout_s,
-            stop_trigger=stop,
+            stop_trigger=stop_trig,
             qty=qty,
             side=side,
-            target_price=target,
+            target_price=tgt,
         )
-        # precompute stop limit
+        # precompute stop limit (away from market vs trigger); always on-tick
         buf = self.stop_limit_buffer_pct / 100.0
         if side > 0:
-            br.stop_limit = round(stop * (1 - buf), 2)
+            br.stop_limit = round_sell_limit(stop_trig * (1 - buf), t)
         else:
-            br.stop_limit = round(stop * (1 + buf), 2)
+            br.stop_limit = round_buy_limit(stop_trig * (1 + buf), t)
         self.brackets[trade_id] = br
         self.events.append({"kind": "entry_submitted", "tag": tag, "symbol": symbol})
         return br
@@ -243,6 +254,8 @@ class OrderManager:
             br.stop.status = "CANCELLED"
             exit_side = br.stop.side
             through = ltp * (0.995 if exit_side == "SELL" else 1.005)
+            t = tick_for_price(ltp)
+            px = round_sell_limit(through, t) if exit_side == "SELL" else round_buy_limit(through, t)
             tag = br.entry.client_tag + "W"
             self.broker.place_order(
                 client_tag=tag,
@@ -252,7 +265,7 @@ class OrderManager:
                 order_type="LIMIT",
                 product=br.entry.product,
                 purpose="exit",
-                price=round(through, 2),
+                price=px,
                 trigger=None,
             )
 
