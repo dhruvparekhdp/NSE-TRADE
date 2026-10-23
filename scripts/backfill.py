@@ -1,7 +1,7 @@
 """Backfill helpers.
 
   # From a local bhavcopy CSV/zip (no Angel key needed):
-  python -m scripts.backfill --bhav path/to/bhav.csv --lake ./data/lake
+  python -m scripts.backfill --bhav path/to/bhav.csv
 
   # Angel 1m (needs keys in .env) — evening:
   python -m scripts.backfill --angel --symbol SBIN --token 3045 --days 30
@@ -13,20 +13,21 @@ import argparse
 from datetime import date, timedelta
 from pathlib import Path
 
+from config.paths import lake_dir
 from data.history import ingest_bhav_to_lake, parse_bhavcopy_csv, parse_bhavcopy_zip, window_30d
 from data.lake import Lake
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--lake", default="./data/lake")
+    p.add_argument("--lake", default=None, help="default: settings.data_dir/lake")
     p.add_argument("--bhav", help="CSV or ZIP bhavcopy path")
     p.add_argument("--angel", action="store_true")
     p.add_argument("--symbol")
     p.add_argument("--token")
     p.add_argument("--days", type=int, default=30)
     args = p.parse_args(argv)
-    lake = Lake(Path(args.lake))
+    lake = Lake(Path(args.lake) if args.lake else lake_dir())
 
     if args.bhav:
         path = Path(args.bhav)

@@ -1,6 +1,6 @@
 """Run a strategy through the lab and record a trial (plan A11).
 
-  python -m scripts.research --strategy S6_swing --symbol SBIN --lake ./data/lake
+  python -m scripts.research --strategy S6_swing --symbol SBIN
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 
+from config.paths import engine_db_path, lake_dir
 from data.lake import Lake
 from lab.backtest import run_daily_book
 from lab.evaluate import gate
@@ -21,10 +22,14 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--strategy", required=True)
     p.add_argument("--symbol", default="SBIN")
-    p.add_argument("--lake", default="./data/lake")
-    p.add_argument("--db", default="./data/engine.db")
+    p.add_argument("--lake", default=None, help="default: settings.data_dir/lake")
+    p.add_argument("--db", default=None, help="default: settings.data_dir/engine.db")
     p.add_argument("--capital", type=float, default=50_000.0)
     args = p.parse_args(argv)
+    if args.lake is None:
+        args.lake = str(lake_dir())
+    if args.db is None:
+        args.db = str(engine_db_path())
 
     lake = Lake(Path(args.lake))
     daily = lake.read_daily(args.symbol)

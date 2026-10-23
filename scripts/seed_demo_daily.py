@@ -56,11 +56,13 @@ def synth(symbol: str, start: date, end: date, seed: float = 100.0) -> pd.DataFr
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--lake", default="./data/lake")
+    p.add_argument("--lake", default=None, help="default: settings.data_dir/lake")
     p.add_argument("--symbols", default="SBIN,RELIANCE,TCS,INFY,HDFCBANK")
     p.add_argument("--years", type=int, default=8)
     args = p.parse_args(argv)
-    lake = Lake(Path(args.lake))
+    from config.paths import lake_dir
+
+    lake = Lake(Path(args.lake) if args.lake else lake_dir())
     end = date.today()
     start = date(end.year - args.years, end.month, end.day)
     for i, sym in enumerate(args.symbols.split(",")):
