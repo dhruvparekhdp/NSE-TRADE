@@ -9,6 +9,7 @@ from typing import Any
 from core.costs import rates_for, round_trip
 from core.exits import ExitRules, Position, fill_entry, step_exits, virtual_outcome
 from core.risk import PortfolioState, RiskLimits, can_open, size
+from core.sessions import daily_bar_close_ms
 from core.types import Bar, Signal
 from strategies.base import BarView, Context, Strategy, mirror, random_baseline
 
@@ -136,7 +137,7 @@ def replay_through_jobs(
     open_tr: PaperTrade | None = None
 
     for i, bar in enumerate(daily_bars):
-        decision_ms = bar.ts_ms + 6 * 3600 * 1000
+        decision_ms = daily_bar_close_ms(bar.ts_ms) + 1_000
         bars_so_far = daily_bars[: i + 1]
 
         # --- job_eod_fill: try to fill yesterday's pending on today's bar ---

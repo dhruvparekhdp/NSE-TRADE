@@ -5,10 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import pytest
-
 from core.types import Bar
-from strategies.base import BarView, LookaheadError
+from strategies.base import BarView
 
 IST = ZoneInfo("Asia/Kolkata")
 

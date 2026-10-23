@@ -10,7 +10,7 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 | id | status | commit | note |
 |---|---|---|---|
 | V0-1 | done | ea158de | fix 2 ruff F401; MVP PR link |
-| V0-2 | done | 4a22802 | web_host 127.0.0.1; Secure cookie; HTTPS keys gate |
+| V0-2 | done | e122bf7 | HTTPS keys gate + trusted_proxy (R3); nginx docs |
 | V0-3 | done | 123b840 | `x if x is not None else now()` |
 | V0-4 | done | 6b282b2 | core/ticks.py + tick_bands.json |
 | V0-5 | done | c25b0d3 | scripts use settings.data_dir |
@@ -24,7 +24,7 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 |---|---|---|---|
 | V1-1 | done | c5c6fc4 | sessions.json + session_state(stock_class) |
 | V1-2 | done | d92c60b | holidays / CalendarMissing / Muhurat / runner skip |
-| V1-3 | done | d92c60b | derive square_off / no_entry |
+| V1-3 | done | 211ffb3 | runner crons use derive_engine_times (R9) |
 | V1-4 | done | d92c60b | costs_angel.json + min brokerage ₹5 |
 | V1-5 | done | d92c60b | instruments is_fo + surveillance + exposure |
 | V1-6 | done | d92c60b | universe_history survivorship |
@@ -36,9 +36,9 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 | id | status | commit | note |
 |---|---|---|---|
 | V1b-1 | done | 07224e3 | global_cues + flows |
-| V1b-2 | done | 07224e3 | preopen snapshots |
+| V1b-2 | done | ded258a | preopen parse + refresh_preopen + runner job (R1) |
 | V1b-3 | done | 07224e3 | headlines fetch/tag/score |
-| V1b-4 | done | 07224e3 | morning brief + opening type + risk-off |
+| V1b-4 | done | ded258a | morning brief job writes table; opening type job (R1) |
 | V1b-5 | done | 07224e3 | /api/opening|/sentiment|/headlines |
 | V1b-6 | done | 07224e3 | opening features on signals |
 
@@ -46,10 +46,10 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V2-1 | done | e5e8421 | daily fills / gap stop / trail |
-| V2-2 | done | e5e8421 | intraday stops both sides + targets |
-| V2-3 | done | e5e8421 | BarView timeframe close |
-| V2-4 | done | e5e8421 | real mirror/random baselines |
+| V2-1 | done | dd4c9ba | daily fills / gap stop; trail ATR14 from bars (R13) |
+| V2-2 | partial | ef6d956 | intraday stops; context builder + resample (R6); live runner still thin |
+| V2-3 | done | c4ecc8b | daily close from sessions.json; exclude forming bars (R12) |
+| V2-4 | done | 68a47f9 | baselines simulated in research scripts; gate fails if empty (R4) |
 | V2-5 | done | e5e8421 | portfolio backtest |
 | V2-6 | done | e5e8421 | evaluate halves + ledger columns |
 | V2-7 | done | e5e8421 | core/exits.py shared engine |
@@ -70,8 +70,8 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 | V4-2 | done | 87f27ea | quotes Angel+Yahoo |
 | V4-3 | done | 87f27ea | PaperBroker accounting |
 | V4-4 | done | 87f27ea | outcomes + take/skip |
-| V4-5 | done | 87f27ea | Broker protocol + watchdog |
-| V4-6 | done | 87f27ea | paper_engine e2e parity |
+| V4-5 | partial | 5a1a6b1 | Broker protocol, crossed_since watchdog, square_off LIMIT (R8); Angel live send still gated |
+| V4-6 | partial | ded258a | replay_through_jobs parity test; runner jobs log-only without lake |
 | V4-7 | done | 87f27ea | Telegram alerts |
 | V4-8 | done | 87f27ea | parity job |
 
@@ -90,10 +90,14 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 | id | status | commit | note |
 |---|---|---|---|
-| V6-1 | done | db7a6e7 | Angel WS |
-| V6-2 | done | db7a6e7 | bars late-tick |
-| V6-3 | done | db7a6e7 | Book A shadow signals |
+| V6-1 | partial | 4c7d570 | reconnect loop + fakes (R15); SmartAPI WS not in runner |
+| V6-2 | partial | db7a6e7 | bars late-tick helpers; F&O 15:14 rule not fully wired in runner |
+| V6-3 | partial | ded258a | shadow_scan scheduled; needs live bars from WS |
 | V6-4 | done | db7a6e7 | 1m history depth report |
+
+## V-FIX-1 — review fixes (`feat/v-fix-1`)
+
+See `docs/phase-reports/V-FIX-1.md`. R3–R15 addressed per review §5; **266** tests green.
 
 ## V7 — live (STOP — needs owner written yes)
 

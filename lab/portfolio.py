@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from core.exits import ExitRules, Position, fill_entry, step_exits
 from core.risk import PortfolioState, RiskLimits, can_open, size
+from core.sessions import daily_bar_close_ms
 from core.types import Bar, Signal
 from data.universe import universe_on
 from lab.backtest import BacktestResult, BTTrade, _close_bt
@@ -129,7 +130,7 @@ def run_portfolio_daily(
             if sym.upper() not in universe_on(day) and day.year >= 2019:
                 # fixture universe may be empty for modern dates — skip filter when empty seed history only
                 pass
-            decision_ms = bar.ts_ms + 6 * 3600 * 1000
+            decision_ms = daily_bar_close_ms(bar.ts_ms) + 1_000
             view = BarView(bars=bars[: i + 1], decision_ms=decision_ms, timeframe="1d")
             ctx = Context(trade_date=str(day))
             for strat in strategies:

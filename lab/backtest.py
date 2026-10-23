@@ -10,6 +10,7 @@ from core.costs import cost_in_r, rates_for, round_trip
 from core.exits import ExitRules, Position, fill_entry, step_exits
 from core.indicators import atr as atr_series
 from core.risk import PortfolioState, RiskLimits, can_open, size
+from core.sessions import daily_bar_close_ms
 from core.types import Bar, Signal
 from data.universe import universe_on
 from lab.context import bars_for_strategy
@@ -105,7 +106,7 @@ def run_daily_book(
     for i in range(len(daily_bars)):
         bar = daily_bars[i]
         # After close for signals; entry uses the bar's own open as fill day 09:15
-        decision_ms = bar.ts_ms + 6 * 3600 * 1000  # ~15:15 — daily bar closed
+        decision_ms = daily_bar_close_ms(bar.ts_ms) + 1_000  # after CAS / session close (R12)
         view = BarView(bars=daily_bars[: i + 1], decision_ms=decision_ms, timeframe="1d")
         ctx = Context(trade_date=str(i), news_score=None)
         if ctx_factory:
