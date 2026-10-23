@@ -8,6 +8,7 @@ from typing import Any
 
 from core.costs import cost_in_r, rates_for, round_trip
 from core.exits import ExitRules, Position, fill_entry, step_exits
+from core.indicators import atr as atr_series
 from core.risk import PortfolioState, RiskLimits, can_open, size
 from core.types import Bar, Signal
 from data.universe import universe_on
@@ -178,8 +179,12 @@ def run_daily_book(
 
         # Manage open position on subsequent bars
         if open_pos is not None and open_trade is not None:
-            atr_f = abs(open_trade.entry_price - open_trade.stop_init) / 2.5 or None
-            # Prefer feature atr if present on trade — not stored; use trail from closes
+            # R13 / PLAN A10: trail from current ATR14 on daily bars, not entry stop/2.5
+            hs = [b.high for b in daily_bars[: i + 1]]
+            ls = [b.low for b in daily_bars[: i + 1]]
+            cs = [b.close for b in daily_bars[: i + 1]]
+            atr14 = atr_series(hs, ls, cs, 14)[-1]
+            atr_f = float(atr14) if atr14 is not None else None
             open_pos, ev = step_exits(open_pos, bar, rules, atr=atr_f)
             if ev:
                 _close_bt(open_trade, ev.price, ev.ts_ms, ev.reason, open_pos.sessions_held)
