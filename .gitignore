@@ -1,4 +1,5 @@
 .env
+var/local/angel.env
 .venv/
 __pycache__/
 *.py[cod]
