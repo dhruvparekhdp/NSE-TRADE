@@ -145,11 +145,10 @@ class EngineRunner:
     async def job_pending(self) -> None:
         if not self._trading_day_ok(allow_special_entries=False):
             return
-        today = datetime.now(IST_Z).date().isoformat()
-        n = self.db.execute(
-            "SELECT COUNT(*) AS n FROM pending_orders WHERE trade_date=? AND status='pending'",
-            (today,),
-        ).fetchone()["n"]
+        from engine.paper_jobs import job_pending
+
+        today = datetime.now(IST_Z).date()
+        n = await asyncio.to_thread(job_pending, self.db, trade_date=today)
         log.info("job: pending_orders ready n=%s", n)
 
     async def job_book_a_shadow(self) -> None:
@@ -174,33 +173,88 @@ class EngineRunner:
             return
         log.info("job: stop websocket")
 
+    async def job_daily_bars(self) -> None:
+        if not self._trading_day_ok():
+            return
+        from config.paths import lake_dir
+        from data.angel_daily import job_daily_bars, universe_symbol_tokens
+        from data.lake import Lake
+
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        tokens = universe_symbol_tokens(self.db)
+        if not tokens:
+            log.info("job: daily_bars skip (no instrument tokens)")
+            return
+        api = getattr(self, "_daily_candle_api", None)
+        if api is None:
+            log.info("job: daily_bars skip (no Angel session injected)")
+            return
+        try:
+            stats = await asyncio.to_thread(
+                job_daily_bars,
+                lake,
+                self.db,
+                symbols=tokens,
+                trade_date=today,
+                api=api,
+            )
+            log.info("job: daily_bars %s", stats)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("daily_bars failed: %s", exc)
+
     async def job_eod_fill(self) -> None:
         if not self._trading_day_ok():
             return
-        from engine.jobs import eod_fill_pending, load_pending_signals
+        from config.paths import lake_dir
+        from data.lake import Lake
+        from engine.paper_jobs import job_eod_fill
 
-        today = datetime.now(IST_Z).date().isoformat()
-        pending = load_pending_signals(self.db, today)
-        if not pending:
-            log.info("job: eod_fill nothing pending")
-            return
-        # Bars come from the lake / Angel ONE_DAY — empty dict → no_bar statuses recorded in logs
-        results = eod_fill_pending(pending, {})
-        log.info("job: eod_fill n=%s", len(results))
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        try:
+            results = await asyncio.to_thread(job_eod_fill, self.db, lake, trade_date=today)
+            log.info("job: eod_fill n=%s", len(results))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("eod_fill failed: %s", exc)
 
     async def job_scan(self) -> None:
         if not self._trading_day_ok(allow_special_entries=False):
             return
-        enabled = set(self.settings.strategies_enabled or [])
-        if not enabled:
-            log.info("job: scan skip (strategies_enabled empty — shadow-only)")
-            return
-        log.info("job: Book B scan enabled=%s", sorted(enabled))
+        from config.paths import lake_dir
+        from data.lake import Lake
+        from engine.paper_jobs import job_scan
+
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        enabled = list(self.settings.strategies_enabled or [])
+        try:
+            rows = await asyncio.to_thread(
+                job_scan,
+                self.db,
+                lake,
+                trade_date=today,
+                enabled=enabled,
+                write=True,
+            )
+            log.info("job: Book B scan signals=%s enabled=%s", len(rows), enabled or "shadow-all")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("scan failed: %s", exc)
 
     async def job_outcomes(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("job: outcomes resolve")
+        from config.paths import lake_dir
+        from data.lake import Lake
+        from engine.paper_jobs import job_outcomes
+
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        try:
+            n = await asyncio.to_thread(job_outcomes, self.db, lake, trade_date=today)
+            log.info("job: outcomes resolved n=%s", n)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("outcomes failed: %s", exc)
 
     async def job_eod_report(self) -> None:
         if not self._trading_day_ok():
@@ -282,6 +336,7 @@ class EngineRunner:
             (self._hhmm_cron(sq_at), self.job_square_off, "square_off"),
             ("35 15 * * mon-fri", self.job_stop_feed, "stop_feed"),
             ("45 15 * * mon-fri", self.job_open_type, "open_type"),
+            ("10 16 * * mon-fri", self.job_daily_bars, "daily_bars"),
             ("15 16 * * mon-fri", self.job_eod_fill, "eod_fill"),
             ("20 16 * * mon-fri", self.job_scan, "scan"),
             ("30 16 * * mon-fri", self.job_outcomes, "outcomes"),
