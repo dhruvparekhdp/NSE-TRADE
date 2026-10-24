@@ -17,3 +17,15 @@ def test_merge_env_preserves_existing(tmp_path: Path):
     assert "GROQ_API_KEY=keep_me" in text
     assert "DATABASE_URL=" in text
     assert "DATABASE_URL" in applied
+
+
+def test_merge_angel_into_dotenv(tmp_path: Path):
+    from scripts.sync_local_env import merge_angel_into_dotenv
+
+    angel = tmp_path / "angel.env"
+    nse = tmp_path / ".env"
+    nse.write_text("MODE=paper\n", encoding="utf-8")
+    angel.write_text("ANGEL_API_KEY=k1\nANGEL_CLIENT_CODE=c1\nANGEL_PIN=p1\nANGEL_TOTP_SECRET=t1\n", encoding="utf-8")
+    applied = merge_angel_into_dotenv(angel, nse)
+    assert len(applied) == 4
+    assert "ANGEL_API_KEY=k1" in nse.read_text(encoding="utf-8")

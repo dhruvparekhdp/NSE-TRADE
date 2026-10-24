@@ -9,16 +9,9 @@ mkdir -p var/reports var/news
 echo "== sync env from crypto =="
 "$PY" -m scripts.sync_local_env "$@"
 
-if [[ -f "${ROOT}/var/local/angel.env" ]]; then
-  echo "== merge Angel keys from var/local/angel.env =="
-  while IFS= read -r line; do
-    [[ "$line" =~ ^ANGEL_ ]] || continue
-    key="${line%%=*}"
-    if grep -q "^${key}=" "${ROOT}/.env" 2>/dev/null; then
-      grep -v "^${key}=" "${ROOT}/.env" > "${ROOT}/.env.tmp" && mv "${ROOT}/.env.tmp" "${ROOT}/.env"
-    fi
-    echo "$line" >> "${ROOT}/.env"
-  done < "${ROOT}/var/local/angel.env"
+# Angel: config/angel.env (preferred) merged by sync_local_env; legacy var/local/angel.env still works
+if [[ -f "${ROOT}/var/local/angel.env" ]] && [[ ! -f "${ROOT}/config/angel.env" ]]; then
+  "$PY" -m scripts.sync_local_env --angel "${ROOT}/var/local/angel.env"
 fi
 
 echo "== news + strategy smoke =="
@@ -36,7 +29,7 @@ if "$PY" -m scripts.login_check >/dev/null 2>&1; then
   echo "== Angel OK — starting FY 1m backfill (background) =="
   nohup "$PY" -m scripts.run_fy_angel_backfill >> var/reports/fy_angel_backfill.log 2>&1 &
 else
-  echo "== Angel skipped: copy config/angel.env.example → var/local/angel.env and fill =="
+  echo "== Angel skipped: fill config/angel.env (see config/angel.env.example) =="
 fi
 
 echo "== done; logs under var/reports/ =="

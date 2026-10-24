@@ -10,6 +10,8 @@ from urllib.parse import urlparse, urlunparse
 DEFAULT_CRYPTO = Path.home() / "personal/Tennis-bet/crypto-signal-engine/.env"
 NSE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_NSE = NSE_ROOT / ".env"
+DEFAULT_ANGEL = NSE_ROOT / "config" / "angel.env"
+ANGEL_KEYS = ("ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET")
 
 COPY_KEYS = (
     "DATABASE_URL",
@@ -81,13 +83,37 @@ def merge_env(crypto: Path, nse: Path) -> list[str]:
     return applied
 
 
+def merge_angel_into_dotenv(angel_path: Path, nse_path: Path) -> list[str]:
+    """Overlay ANGEL_* from config/angel.env onto .env for pydantic Settings."""
+    src = _parse(angel_path)
+    if not src:
+        return []
+    dst = _parse(nse_path) if nse_path.exists() else {}
+    applied: list[str] = []
+    for key in ANGEL_KEYS:
+        val = src.get(key, "")
+        if val:
+            dst[key] = val
+            applied.append(key)
+    if not applied:
+        return []
+    nse_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [f"{k}={v}" for k, v in sorted(dst.items())]
+    fd = os.open(nse_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return applied
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--crypto", type=Path, default=DEFAULT_CRYPTO)
     p.add_argument("--out", type=Path, default=DEFAULT_NSE)
+    p.add_argument("--angel", type=Path, default=DEFAULT_ANGEL)
     args = p.parse_args()
     applied = merge_env(args.crypto, args.out)
-    print({"out": str(args.out), "merged_keys": applied, "count": len(applied)})
+    angel = merge_angel_into_dotenv(args.angel, args.out) if args.angel.exists() else []
+    print({"out": str(args.out), "merged_keys": applied, "angel_keys": angel, "count": len(applied) + len(angel)})
     return 0
 
 

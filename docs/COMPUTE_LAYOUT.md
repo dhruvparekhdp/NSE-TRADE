@@ -16,7 +16,7 @@ Owner pattern (same as crypto): **split backtests and extra strategy work** acro
 git clone …/NSE-TRADE.git && cd NSE-TRADE && git checkout feat/v8-complete
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ./scripts/sync_local_env.py
-mkdir -p var/local && cp config/angel.env.example var/local/angel.env   # fill Angel keys
+cp config/angel.env.example config/angel.env   # fill Angel keys (gitignored)
 export DATA_DIR=$PWD/var   # fast disk with room for var/bhav + var/lake
 ./scripts/start_local_stack.sh
 ```
@@ -35,7 +35,7 @@ Copy results back via gitignored `var/reports/*.json` / `prereg_v3.json` or rsyn
 ## Angel keys
 
 - **EC2:** `/keys` portal → Postgres `nse_engine.app_settings` (preferred for server).
-- **Mac / ThinkPad:** `var/local/angel.env` (four `ANGEL_*` lines) — never commit.
+- **Mac / ThinkPad:** `config/angel.env` (four `ANGEL_*` lines) — gitignored; never commit.
 - After adding keys: `.venv/bin/python -m scripts.login_check` must print `1 LOGIN : True` (no secrets in log).
 
 ## Local LLM (ThinkPad)
