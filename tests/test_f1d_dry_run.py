@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from core.types import Bar, Signal
+from core.types import Signal
 from data.lake import Lake
 from engine.state import init_db
 from strategies.base import Context
@@ -42,8 +42,8 @@ class _TinySwing:
 
 
 def test_dry_run_no_write(tmp_path, capsys):
-    from scripts import paper_dry_run
     import strategies.registry as reg
+    from scripts import paper_dry_run
 
     reg.ALL["T_swing"] = _TinySwing()
     lake = Lake(tmp_path / "lake")
@@ -82,6 +82,6 @@ def test_dry_run_no_write(tmp_path, capsys):
     conn.close()
     d_int = int(rows[-1]["date"])
     scan_day = date(d_int // 10000, (d_int // 100) % 100, d_int % 100)
-    paper_dry_run.main(["--date", scan_day.isoformat(), "--lake", str(tmp_path / "lake"), "--no-write", "--symbols", "X"])
+    paper_dry_run.main(["--date", scan_day.isoformat(), "--lake", str(tmp_path / "lake"), "--no-write", "--symbols", "X"])  # noqa: E501
     out = capsys.readouterr().out
     assert "decision=" in out

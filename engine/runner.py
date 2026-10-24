@@ -55,15 +55,45 @@ class EngineRunner:
                 return False
         return True
 
-    async def job_refresh_instruments(self) -> None:
-        if not self._trading_day_ok():
+    async def job_refresh_instruments(self, *, force: bool = False) -> None:
+        """08:30: Nifty 100 + Nifty 50 tokens and ticks from Angel's scrip master (F1e)."""
+        if not force and not self._trading_day_ok():
             return
-        log.info("job: refresh instruments (08:30 IST)")
+        from engine.angel_session import fetch_scrip_master_text, refresh_instruments
+
+        try:
+            text = await asyncio.to_thread(fetch_scrip_master_text)
+            stats = await asyncio.to_thread(refresh_instruments, self.db, text)
+            del text
+            log.info("job: instruments universe=%s missing=%s index=%s", stats["universe"], stats["missing"], stats["index_token"])  # noqa: E501
+        except Exception as exc:  # noqa: BLE001 — never kill the engine; the next run retries
+            log.warning("job: instruments failed: %s", exc)
+
+    async def _ensure_login(self) -> bool:
+        """One Angel session per IST day, reused by later jobs (F1f)."""
+        today = datetime.now(IST_Z).date()
+        if getattr(self, "_daily_candle_api", None) is not None and getattr(self, "_login_date", None) == today:
+            return True
+        from engine.angel_session import AngelCandleClient, angel_login, record_session
+
+        try:
+            api = await asyncio.to_thread(angel_login, get_settings())
+        except Exception as exc:  # noqa: BLE001
+            record_session(self.db, today, False, str(exc))
+            log.warning("job: Angel login failed: %s", exc)
+            return False
+        self._angel_api = api
+        self._daily_candle_api = AngelCandleClient(api)
+        self._login_date = today
+        record_session(self.db, today, True)
+        log.info("job: Angel login ok")
+        return True
 
     async def job_login(self) -> None:
+        """08:45 (retries 08:50, 08:55): log in for the day's data jobs."""
         if not self._trading_day_ok():
             return
-        log.info("job: login (08:45 IST)")
+        await self._ensure_login()
 
     async def job_morning_brief(self) -> None:
         if not self._trading_day_ok():
@@ -186,10 +216,10 @@ class EngineRunner:
         if not tokens:
             log.info("job: daily_bars skip (no instrument tokens)")
             return
-        api = getattr(self, "_daily_candle_api", None)
-        if api is None:
-            log.info("job: daily_bars skip (no Angel session injected)")
+        if not await self._ensure_login():  # the service may have restarted after 08:45
+            log.info("job: daily_bars skip (Angel login failed)")
             return
+        api = self._daily_candle_api
         try:
             stats = await asyncio.to_thread(
                 job_daily_bars,
@@ -329,6 +359,8 @@ class EngineRunner:
         jobs: list[tuple[str, object, str]] = [
             ("30 8 * * mon-fri", self.job_refresh_instruments, "refresh_instruments"),
             ("45 8 * * mon-fri", self.job_login, "login"),
+            ("50 8 * * mon-fri", self.job_login, "login_retry_1"),
+            ("55 8 * * mon-fri", self.job_login, "login_retry_2"),
             ("45 8 * * mon-fri", self.job_morning_brief, "morning_brief"),
             ("0 9 * * mon-fri", self.job_start_feed, "start_feed"),
             ("0 9 * * mon-fri", self.job_pending, "pending"),
@@ -372,6 +404,9 @@ class EngineRunner:
         self._schedule()
         self.scheduler.start()
         self.scheduler.add_job(self.job_free_quotes, id="free_quotes_boot", replace_existing=True)
+        if not self.db.execute("SELECT 1 FROM instruments WHERE in_universe=1 AND token != '' LIMIT 1").fetchone():
+            # empty universe after a fresh deploy: load it now rather than waiting for 08:30
+            self.scheduler.add_job(self.job_refresh_instruments, kwargs={"force": True}, id="instruments_boot", replace_existing=True)  # noqa: E501
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self.settings.web_host, self.settings.web_port)

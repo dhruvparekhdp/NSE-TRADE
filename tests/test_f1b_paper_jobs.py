@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """F1b: paper jobs write DB rows and match lab/backtest over 30 fixture days."""
 
 from __future__ import annotations
@@ -11,10 +12,10 @@ IST = ZoneInfo("Asia/Kolkata")
 
 from core.risk import RiskLimits
 from core.types import Bar, Signal
-from data.lake import Lake
 from data.calendar import next_trading_day
-from engine.paper_jobs import job_eod_fill, job_outcomes, job_scan
+from data.lake import Lake
 from engine.paper_engine import replay_through_jobs
+from engine.paper_jobs import job_eod_fill, job_outcomes, job_scan
 from engine.state import init_db
 from lab.backtest import run_daily_book
 from strategies.base import Context

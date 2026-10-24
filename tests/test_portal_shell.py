@@ -138,7 +138,7 @@ def test_nav_is_hash_based_and_old_crypto_addresses_redirect():
     res = subprocess.run([NODE, "-e", script, str(PORTAL / "nav.js")], capture_output=True, text=True, check=True)
     out = json.loads(res.stdout)
     assert out["hubs"] == ["command", "book", "evidence", "system"]
-    assert out["pages"] == [["today", "mood"], ["paper", "signals"], ["evidence"], ["health", "settings"]]
+    assert out["pages"] == [["today", "mood", "watchlist"], ["paper", "signals"], ["evidence"], ["health", "settings"]]
     # canonical hash addresses are recognised as they are
     assert out["#/command"]["known"] and out["#/command"]["tab"] == "today"
     assert out["#/book/signals"]["known"] and out["#/book/signals"]["to"] == "#/book/signals"
