@@ -114,9 +114,17 @@ See `docs/phase-reports/V-NEXT.md`. Gate table: `docs/phase-reports/V3.md`.
 
 **273** tests green. Full-history PREREG re-run blocked on bhav backfill completion.
 
-## V8 — news / events / FY microdata (PLAN ONLY)
+## V8 — news / events / FY microdata (`feat/v8-news-p0`)
 
-Owner ask 24 Oct 2026: Angel FY 1m + live 1s rollup, expanded news scrape, Hermes-style AI (shared keys), event-study rebounds (e.g. security-lapse names), watchlist strategies. **Spec:** `docs/research/NEWS_EVENT_RESEARCH.md`. Not started on a branch.
+| id | status | note |
+|---|---|---|
+| V8-P0 | done | dedupe + hermes_extract + watchlist_extra + refresh_news_scores; 5 tests |
+| V8-P1 | todo | FY 1m Angel backfill + depth report |
+| V8-P2 | todo | live 1s rollup from WS |
+| V8-P3 | todo | lab/event_study.py + report |
+| V8-P4 | todo | PREREG E* trials |
+
+**Spec:** `docs/research/NEWS_EVENT_RESEARCH.md`. **278** tests green on P0 branch.
 
 ## V7 — live (STOP — needs owner written yes)
 
