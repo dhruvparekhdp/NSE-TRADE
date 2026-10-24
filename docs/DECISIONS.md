@@ -132,3 +132,13 @@ The engine itself is not affected today (systemd sets TZ before the process star
 aware UTC datetime so it can never happen (ticket V0-9). No support email to Angel is needed.
 Still to do (owner): clear the terminal; rotate the MPIN and API key, which were printed to the terminal by the SDK's error log
 during one test, and re-issue the TOTP key, which was shared in chat; save the new values on /keys and run Test Angel once.
+
+## 2026-10-24 — V8 news / events / FY data (plan approved in chat, not built)
+
+Owner asked to extend beyond V-NEXT: capture **FY 2026-27** (from 2026-04-01) Angel 1m + live stream bucketed to **1s bars for research** (SnapQuote is event-driven, not guaranteed 1 Hz); broaden **stock-level news** scrape; reuse **crypto HF Space + LLM budget + shared headlines** (`docs/SHARED_INFRA.md`); run **event studies** (drop/rebound after bad headlines, e.g. security-lapse names); extend **watchlist**; pre-register strategies only after base rates exist.
+
+Decisions:
+- Full spec in `docs/research/NEWS_EVENT_RESEARCH.md`; implementation on future `feat/v8-*` branches.
+- Store 1s bars only for event windows ±5 sessions by default (disk/RAM cap); full FY at 1m per plan A7.
+- `news_filter_enabled` remains **false** until E* trials show lift in both halves where data exists.
+- Hermes = port **pattern** (dedupe + `ask_json` extract), not shared crypto trading DB.

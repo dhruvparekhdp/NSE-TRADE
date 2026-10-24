@@ -7,7 +7,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from core.exits import ExitRules, Position, fill_entry, step_exits
-from core.risk import PortfolioState, RiskLimits, can_open, size
+from core.risk import PortfolioState, RiskLimits, can_open, on_swing_close, on_swing_open, size
 from core.sessions import daily_bar_close_ms
 from core.types import Bar, Signal
 from data.universe import universe_on
@@ -42,6 +42,9 @@ def run_portfolio_daily(
 ) -> BacktestResult:
     """Shared-cash portfolio over universe_on(date); one position per symbol."""
     limits = limits or RiskLimits()
+    from data.sectors import load_sector_map
+
+    sector_map = load_sector_map() or None
     state = PortfolioState(capital=capital, start_capital=capital)
     result = BacktestResult()
     rules = ExitRules(product="CNC", max_sessions=hold_sessions, entry_limit_offset_pct=0.0)
@@ -66,6 +69,7 @@ def run_portfolio_daily(
                 result.trades.append(tr)
                 state.open_swing = max(0, state.open_swing - 1)
                 state.open_symbols.discard(sym)
+                on_swing_close(state, sym, sector_map)
                 state.capital += tr.net_inr
                 del open_pos[sym]
 
@@ -81,12 +85,12 @@ def run_portfolio_daily(
             if fill is None:
                 result.no_fills.append(pe.signal)
                 continue
-            ok, reason = can_open(state, pe.signal, limits, bars[i].ts_ms)
+            ok, reason = can_open(state, pe.signal, limits, bars[i].ts_ms, sector_map=sector_map)
             if not ok:
-                if reason == "max_open_swing":
+                if reason in ("max_open_swing", "sector_cap"):
                     result.signals.append(pe.signal)
                     # log skip via features
-                    pe.signal.features = {**pe.signal.features, "skip_reason": "max_open_swing"}
+                    pe.signal.features = {**pe.signal.features, "skip_reason": reason}
                 continue
             sz = size(fill.price, pe.signal.stop, state.capital, limits.risk_per_trade_pct, 0.05, "B", limits)
             if sz.qty <= 0:
@@ -117,6 +121,7 @@ def run_portfolio_daily(
             )
             state.open_swing += 1
             state.open_symbols.add(sym)
+            on_swing_open(state, sym, sector_map)
         pending = still
 
         # new signals

@@ -7,9 +7,9 @@ from datetime import date
 from typing import Any
 
 from core.costs import cost_in_r, rates_for, round_trip
-from core.exits import ExitRules, Position, fill_entry, step_exits
+from core.exits import ExitRules, Position, fill_entry, fill_entry_at_open, step_exits
 from core.indicators import atr as atr_series
-from core.risk import PortfolioState, RiskLimits, can_open, size
+from core.risk import PortfolioState, RiskLimits, can_open, on_swing_close, on_swing_open, size
 from core.sessions import daily_bar_close_ms
 from core.types import Bar, Signal
 from data.universe import universe_on
@@ -86,9 +86,14 @@ def run_daily_book(
     limits: RiskLimits | None = None,
     ctx_factory: Any = None,
     hold_sessions: int = 20,
+    sector_map: dict[str, str] | None = None,
 ) -> BacktestResult:
     """Book B daily backtest with correct LIMIT fills, gap stops, trail (V2-1)."""
     limits = limits or RiskLimits()
+    if sector_map is None:
+        from data.sectors import load_sector_map
+
+        sector_map = load_sector_map() or None
     state = PortfolioState(capital=capital, start_capital=capital)
     result = BacktestResult()
     rules = ExitRules(
@@ -114,7 +119,13 @@ def run_daily_book(
 
         # Try fill pending entry on this bar (next day after signal)
         if pending is not None and open_pos is None:
-            fill = fill_entry(pending, bar, rules)
+            if (pending.features or {}).get("entry_mode") == "open":
+                fill = fill_entry_at_open(pending, bar, rules)
+                atr_o = pending.features.get("atr14") if pending.features else None
+                if atr_o is not None:
+                    pending.stop = fill.price - 2.5 * float(atr_o)
+            else:
+                fill = fill_entry(pending, bar, rules)
             if fill is None:
                 result.no_fills.append(pending)
                 pending = None
@@ -164,6 +175,7 @@ def run_daily_book(
                     )
                     state.open_swing += 1
                     state.open_symbols.add(symbol)
+                    on_swing_open(state, symbol, sector_map)
                     atr_from_sig = pending.features.get("atr14") if pending else None
                     pending = None
                     # Entry day: stop applies from the open (conservative) — step this bar
@@ -174,6 +186,7 @@ def run_daily_book(
                         result.trades.append(open_trade)
                         state.open_swing = max(0, state.open_swing - 1)
                         state.open_symbols.discard(symbol)
+                        on_swing_close(state, symbol, sector_map)
                         open_pos = None
                         open_trade = None
                     continue
@@ -192,6 +205,7 @@ def run_daily_book(
                 result.trades.append(open_trade)
                 state.open_swing = max(0, state.open_swing - 1)
                 state.open_symbols.discard(symbol)
+                on_swing_close(state, symbol, sector_map)
                 open_pos = None
                 open_trade = None
             continue
@@ -199,13 +213,15 @@ def run_daily_book(
         if open_pos is not None or pending is not None:
             continue
 
+        if ctx.extras.get("block_new_entries"):
+            continue
         sigs = strategy.on_bar(symbol, view, ctx)
         for sig in sigs:
             result.signals.append(sig)
             result.signals.append(mirror(sig))
             if i > 0:
                 result.signals.append(random_baseline(sig, daily_bars[i - 1].ts_ms, daily_bars[i].ts_ms))
-            ok, _reason = can_open(state, sig, limits, decision_ms)
+            ok, _reason = can_open(state, sig, limits, decision_ms, sector_map=sector_map)
             if not ok or sig.role != "pick":
                 continue
             pending = sig

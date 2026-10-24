@@ -5,7 +5,7 @@ from strategies.gap import GapAndGo, GapFade
 from strategies.intraday_momentum import AfternoonMomo
 from strategies.orb import ORB
 from strategies.pdh_rs import PDHRS
-from strategies.swing_breakout import SwingDonchian, SwingKeltner
+from strategies.swing_breakout import SwingDonchian, SwingDonchianOpen, SwingKeltner
 from strategies.vwap_revert import VWAPRevert
 from strategies.xsmom import XSMom
 
@@ -19,6 +19,7 @@ ALL = {
         AfternoonMomo(),
         PDHRS(),
         SwingDonchian(),
+        SwingDonchianOpen(),
         SwingKeltner(),
         XSMom(),
     ]

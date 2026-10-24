@@ -99,6 +99,25 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 See `docs/phase-reports/V-FIX-1.md`. R3–R15 addressed per review §5; **266** tests green.
 
+## V-NEXT — data + PREREG + opening (`feat/v-next`)
+
+See `docs/phase-reports/V-NEXT.md`. Gate table: `docs/phase-reports/V3.md`.
+
+| id | status | note |
+|---|---|---|
+| N1 | partial | bhav resumable (~800+ sessions ok, Apr 2021 in log); lake 469 files / 2404 syms; download still running |
+| N2 | done | PREREG runner + metrics; **no trial passes** on partial lake (honest V3 table) |
+| N3 | done | T6 pre-reg + `S6_swing_open`; T6 run n≈566 gate_fail on partial lake |
+| N4 | done | max 2 Book B / sector; tests |
+| N5 | done | opening_study refreshed (468 proxy sessions); descriptive only |
+| N6 | done | DEPLOY_PROPOSAL |
+
+**273** tests green. Full-history PREREG re-run blocked on bhav backfill completion.
+
+## V8 — news / events / FY microdata (PLAN ONLY)
+
+Owner ask 24 Oct 2026: Angel FY 1m + live 1s rollup, expanded news scrape, Hermes-style AI (shared keys), event-study rebounds (e.g. security-lapse names), watchlist strategies. **Spec:** `docs/research/NEWS_EVENT_RESEARCH.md`. Not started on a branch.
+
 ## V7 — live (STOP — needs owner written yes)
 
 Not started.

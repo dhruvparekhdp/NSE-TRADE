@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from data.calendar import Calendar, load_default_calendar
+from data.calendar import Calendar, CalendarMissing, load_default_calendar
 from data.lake import Lake
 
 
@@ -57,7 +57,11 @@ def trading_day_gaps(daily: pd.DataFrame, start: int, end: int, calendar: Calend
     missing = []
     cur = s
     while cur <= e:
-        if cal.is_trading_day(cur):
+        try:
+            trading = cal.is_trading_day(cur)
+        except CalendarMissing:
+            trading = cur.weekday() < 5
+        if trading:
             key = int(cur.strftime("%Y%m%d"))
             if key not in have:
                 missing.append(key)
