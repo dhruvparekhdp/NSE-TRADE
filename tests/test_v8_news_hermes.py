@@ -30,7 +30,7 @@ def test_cyber_breach_emudhra_rules():
     ev = extract_from_rules(title, extra_names=extra)
     assert ev["event_type"] == "cyber_breach"
     assert ev["severity"] <= -0.3
-    assert "EMUDRA" in ev["symbols"]
+    assert "EMUDHRA" in ev["symbols"]
     assert ev["is_company_specific"] is True
 
 

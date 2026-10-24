@@ -48,7 +48,7 @@ NAMES: dict[str, tuple[str, ...]] = {
     "ITC": (" itc ",),
     "LT": ("larsen", "l&t"),
     "AXISBANK": ("axis bank",),
-    "EMUDRA": ("emudhra", "e-mudra", "emudra"),
+    "EMUDHRA": ("emudhra", "e-mudra", "emudhra"),
 }
 
 

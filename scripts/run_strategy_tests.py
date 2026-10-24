@@ -12,16 +12,16 @@ from strategies.registry import ALL as STRATEGIES
 
 
 def _fixture_closes() -> dict[str, list[tuple[int, float]]]:
-    """Synthetic drop + partial rebound for EMUDRA-style event."""
+    """Synthetic drop + partial rebound for EMUDHRA-style event."""
     base = 20260401
     closes = [100.0, 92.0, 90.0, 91.5, 93.0, 94.0, 95.0, 96.0]
     dates = [base + i for i in range(len(closes))]
-    return {"EMUDRA": list(zip(dates, closes, strict=True))}
+    return {"EMUDHRA": list(zip(dates, closes, strict=True))}
 
 
 def run_event_smoke() -> dict:
     events = [
-        EventPoint("EMUDRA", 20260402, -0.7, "cyber_breach"),
+        EventPoint("EMUDHRA", 20260402, -0.7, "cyber_breach"),
     ]
     data = {k: v for k, v in _fixture_closes().items()}
     summary = summarise_events(events, data)

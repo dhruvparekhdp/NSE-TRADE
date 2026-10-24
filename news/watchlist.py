@@ -25,7 +25,7 @@ def load_extra_name_hints(path: Path | None = None) -> dict[str, tuple[str, ...]
             for part in reason.replace("(", " ").replace(")", " ").split():
                 if len(part) >= 4 and part.isalpha():
                     tokens.append(part)
-            if "emudhra" in reason or sym == "EMUDRA":
+            if "emudhra" in reason or sym == "EMUDHRA":
                 tokens.extend(["emudhra", "e-mudra", "emudra", "e mudhra"])
             out[sym] = tuple(dict.fromkeys(tokens))
     return out
