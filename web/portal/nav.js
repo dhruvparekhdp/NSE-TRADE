@@ -13,7 +13,8 @@
       { id: "today", label: "Today", native: true,
         aliases: ["/command/overview", ["/book/guard", "guard"], ["/command/guard", "guard"]] },
       { id: "mood", label: "Market mood", native: true,
-        aliases: ["/command/opening", "/command/sentiment", "/command/market"] }
+        aliases: ["/command/opening", "/command/sentiment", "/command/market"] },
+      { id: "watchlist", label: "Watchlist", native: true, aliases: ["/system/watchlist"] }
     ] },
     { id: "book", label: "Book", tabs: [
       { id: "paper", label: "Paper book", native: true,
@@ -29,7 +30,7 @@
       { id: "health", label: "Health", native: true,
         aliases: [["/system/golive", "golive"], ["/system/data", "data"], "/system/diagnostics", "/system/jobs"] },
       { id: "settings", label: "Settings", native: true,
-        aliases: [["/system/keys", "keys"], ["/system/watchlist", "universe"], "/command/watchlist", "/system/api", "/system/ai"] }
+        aliases: [["/system/keys", "keys"], "/system/api", "/system/ai"] }
     ] }
   ];
 
