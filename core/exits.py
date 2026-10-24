@@ -19,6 +19,7 @@ class ExitRules:
     max_sessions: int = 20
     # Strategies set entry_ref to the LIMIT price (PLAN A10 close×1.005 is applied upstream).
     entry_limit_offset_pct: float = 0.0
+    entry_at_open: bool = False  # T6: next session open (pre-open auction), not +0.5% limit
     square_off_ms: int | None = None  # intraday engine square-off (UTC ms)
 
 
@@ -88,6 +89,14 @@ def fill_entry(order: Signal, bar: Bar, rules: ExitRules | None = None) -> Entry
     raw = max(bar.open, lim)
     px = _slip(raw, -1, pct=rules.slippage_pct, is_exit=False)
     return EntryFill(price=px, ts_ms=bar.ts_ms, reason="limit")
+
+
+def fill_entry_at_open(order: Signal, bar: Bar, rules: ExitRules | None = None) -> EntryFill:
+    """T6 / PREREG: enter at the session open (pre-open auction), not a limit above close."""
+    rules = rules or ExitRules()
+    raw = bar.open
+    px = _slip(raw, order.side, pct=rules.slippage_pct, is_exit=False)
+    return EntryFill(price=px, ts_ms=bar.ts_ms, reason="open")
 
 
 def _stop_fill_price(pos: Position, bar: Bar, rules: ExitRules) -> tuple[float, str]:

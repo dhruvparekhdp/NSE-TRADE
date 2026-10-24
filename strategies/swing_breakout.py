@@ -54,6 +54,36 @@ class SwingDonchian:
         ]
 
 
+class SwingDonchianOpen:
+    """S6 with next-day open entry (PREREG T6) instead of close×1.005 limit."""
+
+    id = "S6_swing_open"
+    book = "B"
+    timeframe = "1d"
+
+    def on_bar(self, symbol: str, bars: BarView, ctx: Context) -> list[Signal]:
+        base = SwingDonchian()
+        sigs = base.on_bar(symbol, bars, ctx)
+        out: list[Signal] = []
+        for s in sigs:
+            atr = float((s.features or {}).get("atr14") or 0)
+            out.append(
+                Signal(
+                    ts_ms=s.ts_ms,
+                    symbol=s.symbol,
+                    side=s.side,
+                    entry_ref=bars.closed()[-1].close,
+                    stop=bars.closed()[-1].close - 2.5 * atr if atr else s.stop,
+                    target=s.target,
+                    time_exit_ms=s.time_exit_ms,
+                    features={**(s.features or {}), "entry_mode": "open"},
+                    strategy=self.id,
+                    book="B",
+                )
+            )
+        return out
+
+
 class SwingKeltner:
     id = "S6b_keltner"
     book = "B"
