@@ -112,6 +112,8 @@ See `docs/phase-reports/V-FIX-1.md`. R3–R15 addressed per review §5; **266** 
 
 **273** tests green on branch tip.
 
+**Paused 2026-10-24** — owner moved to `feat/v-fix-2` (F1 paper/lake jobs). Resume V-NEXT after bhav backfill + trial re-run.
+
 ## V7 — live (STOP — needs owner written yes)
 
 Not started.
