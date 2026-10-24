@@ -18,6 +18,7 @@ class RiskLimits:
     max_mis_exposure_x: float = 3.0
     max_open_intraday: int = 3
     max_open_swing: int = 4  # ₹25k slots at ₹1L so CNC floor clears (R2)
+    max_open_per_sector: int = 2  # Book B sector cap (V-FIX-2 F1c)
     daily_loss_limit_pct: float = 2.0
     floor_pct: float = 80.0
     max_spread_pct: float = 0.10
@@ -37,6 +38,7 @@ class PortfolioState:
     open_swing: int = 0
     mis_exposure: float = 0.0
     open_symbols: set[str] | None = None
+    open_sector_counts: dict[str, int] | None = None
     session_allows_entry: bool = True
     spread_pct: float | None = None
     dist_to_circuit_pct: float | None = None
@@ -46,10 +48,38 @@ class PortfolioState:
     def __post_init__(self) -> None:
         if self.open_symbols is None:
             self.open_symbols = set()
+        if self.open_sector_counts is None:
+            self.open_sector_counts = {}
 
 
 def _floor_qty(raw: float) -> int:
     return max(0, int(raw))
+
+
+def on_swing_open(state: PortfolioState, symbol: str, sector_map: dict[str, str] | None) -> None:
+    if not sector_map:
+        return
+    from data.sectors import sector_for
+
+    sec = sector_for(symbol, sector_map)
+    counts = state.open_sector_counts or {}
+    counts[sec] = counts.get(sec, 0) + 1
+    state.open_sector_counts = counts
+
+
+def on_swing_close(state: PortfolioState, symbol: str, sector_map: dict[str, str] | None) -> None:
+    if not sector_map:
+        return
+    from data.sectors import sector_for
+
+    sec = sector_for(symbol, sector_map)
+    counts = state.open_sector_counts or {}
+    n = counts.get(sec, 0)
+    if n <= 1:
+        counts.pop(sec, None)
+    else:
+        counts[sec] = n - 1
+    state.open_sector_counts = counts
 
 
 def book_b_slot_healthy(
@@ -118,6 +148,7 @@ def can_open(
     now_ms: int,
     *,
     new_position_value: float = 0.0,
+    sector_map: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
     """Ordered checks from plan A9.3. Returns (ok, machine_reason)."""
     _ = now_ms
@@ -135,6 +166,12 @@ def can_open(
         return False, "max_open_intraday"
     if plan.book == "B" and state.open_swing >= limits.max_open_swing:
         return False, "max_open_swing"
+    if plan.book == "B" and limits.max_open_per_sector > 0 and sector_map is not None:
+        from data.sectors import sector_for
+
+        sec = sector_for(plan.symbol, sector_map)
+        if (state.open_sector_counts or {}).get(sec, 0) >= limits.max_open_per_sector:
+            return False, "sector_cap"
     if plan.book == "A":
         # B26: include the new position's value in the exposure check
         projected = state.mis_exposure + max(0.0, new_position_value)
@@ -173,6 +210,7 @@ def limits_from_settings(settings: Any) -> RiskLimits:
         max_mis_exposure_x=float(getattr(settings, "max_mis_exposure_x", 3.0)),
         max_open_intraday=int(getattr(settings, "max_open_intraday", 3)),
         max_open_swing=int(getattr(settings, "max_open_swing", 4)),
+        max_open_per_sector=int(getattr(settings, "max_open_per_sector", 2)),
         daily_loss_limit_pct=float(getattr(settings, "daily_loss_limit_pct", 2.0)),
         floor_pct=float(getattr(settings, "floor_pct", 80.0)),
         max_spread_pct=float(getattr(settings, "max_spread_pct", 0.10)),

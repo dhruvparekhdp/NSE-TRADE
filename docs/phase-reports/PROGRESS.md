@@ -99,6 +99,17 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 See `docs/phase-reports/V-FIX-1.md`. R3–R15 addressed per review §5; **266** tests green.
 
+## V-FIX-2 F1 — lake + paper jobs (`feat/v-fix-2`)
+
+| id | status | note |
+|---|---|---|
+| F1a | done | `data/angel_daily.py`, runner `job_daily_bars` 16:10 |
+| F1b | done | `engine/paper_jobs.py`, runner scan/fill/outcomes/pending |
+| F1c | done | sector cap + `data/sectors.py` |
+| F1d | done | `scripts/paper_dry_run.py` |
+
+Report: `docs/phase-reports/V-FIX-2-F1.md`. **271** tests green.
+
 ## V7 — live (STOP — needs owner written yes)
 
 Not started.
