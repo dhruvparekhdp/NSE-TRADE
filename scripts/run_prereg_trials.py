@@ -194,6 +194,15 @@ def main(argv: list[str] | None = None) -> int:
         rows.append(run_one(pid, sid, filt, lake, symbols, db, nifty_bars=nifty_bars, vix_by_date=vix_map))
     out = Path(args.lake or lake_dir()).parent / "reports" / "prereg_v3.json"
     out.parent.mkdir(parents=True, exist_ok=True)
+    if out.exists() and want:
+        try:
+            prev = json.loads(out.read_text(encoding="utf-8"))
+            by_id = {r["prereg_id"]: r for r in prev if isinstance(r, dict) and r.get("prereg_id")}
+            for r in rows:
+                by_id[r["prereg_id"]] = r
+            rows = list(by_id.values())
+        except json.JSONDecodeError:
+            pass
     out.write_text(json.dumps(rows, indent=2, default=str), encoding="utf-8")
     print(json.dumps({"report": str(out), "symbols": len(symbols), "rows": rows}, indent=2, default=str))
     return 0

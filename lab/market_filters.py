@@ -1,4 +1,4 @@
-"""PREREG F1/F2 entry filters on Nifty daily series (T3/T4)."""
+"""PREREG F1/F2 filters — trial blocks and paper scan skip reasons."""
 
 from __future__ import annotations
 
@@ -32,8 +32,7 @@ def vol_rank_252(closes: list[float]) -> float | None:
         return None
     hist: list[float] = []
     for end in range(len(closes) - 252, len(closes)):
-        seg = closes[: end + 1]
-        v = realised_vol(seg)
+        v = realised_vol(closes[: end + 1])
         if v is not None:
             hist.append(v)
     if not hist:
@@ -52,6 +51,22 @@ def block_f2_trend(closes: list[float]) -> bool:
     if s[-1] is None or closes[-1] is None:
         return False
     return closes[-1] < s[-1]
+
+
+def f1_skip_reason(closes: list[float], *, max_rank: float = 0.667) -> str | None:
+    rank = vol_rank_252(closes)
+    if rank is not None and rank > max_rank:
+        return "market_filter_f1_vol"
+    return None
+
+
+def f2_skip_reason(closes: list[float]) -> str | None:
+    s = sma(closes, 200)
+    if s[-1] is None:
+        return None
+    if closes[-1] < s[-1]:
+        return "market_filter_f2_trend"
+    return None
 
 
 def nifty_closes_to_date(nifty_bars: list[Bar], upto_index: int) -> list[float]:

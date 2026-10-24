@@ -148,6 +148,7 @@ def test_runner_registers_r1_jobs():
     r._schedule()
     ids = {j.id for j in r.scheduler.get_jobs()}
     for need in (
+        "daily_bars",
         "morning_brief",
         "cues",
         "preopen",

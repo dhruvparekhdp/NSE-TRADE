@@ -105,26 +105,28 @@ See `docs/phase-reports/V-NEXT.md`. Gate table: `docs/phase-reports/V3.md`.
 
 | id | status | note |
 |---|---|---|
-| N1 | partial | bhav resumable (~800+ sessions ok, Apr 2021 in log); lake 469 files / 2404 syms; download still running |
-| N2 | done | PREREG runner + metrics; **no trial passes** on partial lake (honest V3 table) |
-| N3 | done | T6 pre-reg + `S6_swing_open`; T6 run n≈566 gate_fail on partial lake |
-| N4 | done | max 2 Book B / sector; tests |
-| N5 | done | opening_study refreshed (468 proxy sessions); descriptive only |
-| N6 | done | DEPLOY_PROPOSAL |
+| N1 | partial | bhav resumable; lake rebuild as files land |
+| N2–N6 | done | see V-NEXT.md |
 
-**273** tests green. Full-history PREREG re-run blocked on bhav backfill completion.
-
-## V8 — news / events / FY microdata (`feat/v8-news-p0`)
+## V-FIX-2 F1 — lake + paper jobs (merged into `feat/v8-complete`)
 
 | id | status | note |
 |---|---|---|
-| V8-P0 | done | dedupe + hermes_extract + watchlist_extra + refresh_news_scores; 5 tests |
-| V8-P1 | todo | FY 1m Angel backfill + depth report |
-| V8-P2 | todo | live 1s rollup from WS |
-| V8-P3 | todo | lab/event_study.py + report |
-| V8-P4 | todo | PREREG E* trials |
+| F1a–F1d | done | daily bars, paper_jobs, sector cap, dry_run — `docs/phase-reports/V-FIX-2-F1.md` |
 
-**Spec:** `docs/research/NEWS_EVENT_RESEARCH.md`. **278** tests green on P0 branch.
+## V8 — news / events / FY microdata (`feat/v8-complete`)
+
+| id | status | note |
+|---|---|---|
+| V8-P0 | done | Hermes-style news extract |
+| V8-P1 | partial | `fy_history_depth.py` (daily; 1m backfill still manual) |
+| V8-P2 | done | 1s + 1m `MultiBarFeed`, tick_smoke |
+| V8-P3 | done | event_study + run_strategy_tests |
+| V8-P4 | todo | PREREG E* after event base rates |
+
+Report: `docs/phase-reports/V8-COMPLETE.md`. **289** tests green.
+
+**Spec:** `docs/research/NEWS_EVENT_RESEARCH.md`.
 
 ## V7 — live (STOP — needs owner written yes)
 

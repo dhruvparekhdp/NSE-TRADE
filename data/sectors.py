@@ -1,4 +1,4 @@
-"""NSE sector map from ind_nifty100list.csv (Industry column) — Book B sector cap (V-NEXT N4)."""
+"""NSE sector map from ind_nifty100list.csv (Industry column) — Book B sector cap."""
 
 from __future__ import annotations
 
