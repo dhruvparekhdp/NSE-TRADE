@@ -99,6 +99,19 @@ PR: https://github.com/dhruvparekhdp/NSE-TRADE/pull/new/feat/mvp-backtest-news
 
 See `docs/phase-reports/V-FIX-1.md`. R3–R15 addressed per review §5; **266** tests green.
 
+## V-NEXT — data + PREREG + opening (`feat/v-next`)
+
+| id | status | note |
+|---|---|---|
+| N1 | partial | download_bhav running 2012→today; build_lake + data_health report; corp_actions.csv scaffold |
+| N2 | partial | run_prereg_trials + trial_metrics; gate table honest on 4-day pilot lake — see V3.md |
+| N3 | partial | PREREG T6 2026-10-24; S6_swing_open + open fill; T6 run recorded (n=0 on pilot) |
+| N4 | done | max 2 Book B / sector; ind_nifty100list.csv; tests |
+| N5 | partial | opening_study.py + OPENING.md on pilot lake (descriptive) |
+| N6 | done | docs/DEPLOY_PROPOSAL.md (rsync vs git; HTTPS/Tailscale) |
+
+**273** tests green on branch tip.
+
 ## V7 — live (STOP — needs owner written yes)
 
 Not started.
