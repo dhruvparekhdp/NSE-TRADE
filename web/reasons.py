@@ -19,6 +19,8 @@ REASONS: dict[str, str] = {
     "max_open_intraday": "too many intraday positions open already",
     "max_open_swing": "swing book is full: maximum open positions reached",
     "sector_cap": "already two swing positions open in this sector",
+    "market_filter_f1_vol": "Nifty volatility in the top third of the past year",
+    "market_filter_f2_trend": "Nifty below its 200-day average",
     "mis_exposure": "intraday exposure is at its cap",
     "symbol_open": "already holding this stock",
     "spread_wide": "bid-ask spread too wide to trade cheaply",

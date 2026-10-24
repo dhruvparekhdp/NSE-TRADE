@@ -133,6 +133,10 @@ aware UTC datetime so it can never happen (ticket V0-9). No support email to Ang
 Still to do (owner): clear the terminal; rotate the MPIN and API key, which were printed to the terminal by the SDK's error log
 during one test, and re-issue the TOTP key, which was shared in chat; save the new values on /keys and run Test Angel once.
 
+## 2026-10-24 — Mac + ThinkPad compute split (owner)
+
+Same pattern as crypto: **Mac** for dev/CI; **ThinkPad on Tailscale** for heavy NSE backtests, full PREREG runs, lake builds, news LLM batches, and optional local LLM experiments. **EC2** remains paper/live scheduler + `/keys` + Angel order IP. Spec: `docs/COMPUTE_LAYOUT.md`.
+
 ## 2026-10-24 — V8 news / events / FY data (plan approved in chat, not built)
 
 Owner asked to extend beyond V-NEXT: capture **FY 2026-27** (from 2026-04-01) Angel 1m + live stream bucketed to **1s bars for research** (SnapQuote is event-driven, not guaranteed 1 Hz); broaden **stock-level news** scrape; reuse **crypto HF Space + LLM budget + shared headlines** (`docs/SHARED_INFRA.md`); run **event studies** (drop/rebound after bad headlines, e.g. security-lapse names); extend **watchlist**; pre-register strategies only after base rates exist.

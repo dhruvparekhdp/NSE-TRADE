@@ -18,7 +18,7 @@ class RiskLimits:
     max_mis_exposure_x: float = 3.0
     max_open_intraday: int = 3
     max_open_swing: int = 4  # ₹25k slots at ₹1L so CNC floor clears (R2)
-    max_open_per_sector: int = 2  # Book B: at most N open CNC names per NSE Industry (V-NEXT N4)
+    max_open_per_sector: int = 2  # Book B sector cap (V-NEXT N4 / V-FIX-2 F1c)
     daily_loss_limit_pct: float = 2.0
     floor_pct: float = 80.0
     max_spread_pct: float = 0.10
@@ -170,8 +170,7 @@ def can_open(
         from data.sectors import sector_for
 
         sec = sector_for(plan.symbol, sector_map)
-        open_in_sec = (state.open_sector_counts or {}).get(sec, 0)
-        if open_in_sec >= limits.max_open_per_sector:
+        if (state.open_sector_counts or {}).get(sec, 0) >= limits.max_open_per_sector:
             return False, "sector_cap"
     if plan.book == "A":
         # B26: include the new position's value in the exposure check

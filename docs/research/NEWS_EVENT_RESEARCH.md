@@ -11,7 +11,7 @@
 | Term | Meaning here |
 |---|---|
 | **Financial year (India)** | FY **2026-27** = **2026-04-01 → 2027-03-31**. “This FY” = from 2026-04-01 through **today** (and rolling forward). |
-| **Watchlist** | Nifty 100 (`config/ind_nifty100list.csv`) + `config/watchlist_extra.csv` (owner names, e.g. **EMUDRA** / eMudhra-adjacent tickers — verify NSE symbol). |
+| **Watchlist** | Nifty 100 (`config/ind_nifty100list.csv`) + `config/watchlist_extra.csv` (owner names, e.g. **EMUDHRA** / eMudhra-adjacent tickers — verify NSE symbol). |
 | **Event** | Dated headline or exchange filing with `event_type` (see `news/india_rules.py`), symbol link, and severity score. |
 | **Hermes (crypto)** | Headline ingest → dedupe (embed) → LLM extract `{symbols, event_type, severity}` → JSONL store. NSE gets a **slim port**, not a copy of crypto DB. |
 | **1-second tick** | **Target granularity for research**, not a broker guarantee. Angel SmartAPI **SnapQuote (mode 3)** pushes **quotes when they change**, not a fixed 1 Hz clock. We **bucket** arrivals into **1s OHLCV + spread** bars for FY live capture; plan A7 still avoids storing raw tick firehoses long-term. |
@@ -75,7 +75,7 @@ Prompt output schema (strict JSON):
 
 ```json
 {
-  "symbols": ["EMUDRA"],
+  "symbols": ["EMUDHRA"],
   "event_type": "cyber_breach",
   "severity": -0.8,
   "summary": "...",
@@ -131,7 +131,7 @@ Each trial: `lab/evaluate.py` + mirror + random + cost stress; register in `docs
 
 ## 5. Watchlist workflow
 
-1. **`config/watchlist_extra.csv`** — `symbol,reason,added_date` (owner: eMudhra / EMUDRA row).
+1. **`config/watchlist_extra.csv`** — `symbol,reason,added_date` (owner: eMudhra / EMUDHRA).
 2. Nightly **V8-W1** job: for each watchlist symbol, pull last 7d headlines, score, append event rows, push Telegram digest (optional).
 3. Portal page **Research → Events** (later): table of events + CAR sparklines (read-only).
 
@@ -176,7 +176,7 @@ Systemd: extend `nse-engine` cron with `job_news` (already stubbed in `engine/ru
 ## 8. Immediate actions (owner / builder)
 
 1. **Let bhav download finish** (now ~826 ok / 2021-04); `build_lake` + full PREREG re-run (V-NEXT closure).
-2. **Confirm EMUDRA** NSE symbol and add to `watchlist_extra.csv`.
+2. **EMUDHRA** on watchlist (`config/watchlist_extra.csv`) — confirmed.
 3. **Point `.env`** at shared HF/Groq paths on server (no keys in git).
 4. Open **`feat/v8-news-p0`**: implement `news/hermes_extract.py` + tests + one offline script `scripts/refresh_news_scores.py`.
 5. Schedule **FY 1m backfill** overnight (Angel throttle; not in market hours for live WS stress).
