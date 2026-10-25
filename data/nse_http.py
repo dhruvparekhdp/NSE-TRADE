@@ -42,7 +42,7 @@ class NseSession:
         self._jar = http.cookiejar.CookieJar()
         self._opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self._jar))
         self._timeout = timeout
-        self._warmed_at = 0.0
+        self._warmed_at: float | None = None  # None = never warmed (monotonic() starts at boot, so 0.0 is not "long ago")
 
     def _read(self, url: str) -> bytes:
         req = urllib.request.Request(url, headers=_BROWSER_HEADERS)
@@ -53,7 +53,7 @@ class NseSession:
         return raw
 
     def _warm(self) -> None:
-        if time.monotonic() - self._warmed_at < _WARM_TTL_S:
+        if self._warmed_at is not None and time.monotonic() - self._warmed_at < _WARM_TTL_S:
             return
         self._read(NSE_HOME)
         self._warmed_at = time.monotonic()
