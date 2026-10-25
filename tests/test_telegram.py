@@ -9,8 +9,13 @@ from notify.telegram import TelegramClient
 
 
 @pytest.mark.asyncio
-async def test_send_noop_when_unconfigured():
-    client = TelegramClient(token=None, chat_id=None)
+async def test_send_noop_when_unconfigured(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("MODE=paper\n", encoding="utf-8")
+    from config.settings import reset_settings_cache
+
+    reset_settings_cache()
+    client = TelegramClient(token="", chat_id="")
     assert client.configured is False
     assert await client.send("hello") is False
 

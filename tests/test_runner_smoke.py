@@ -11,11 +11,14 @@ from engine.runner import EngineRunner
 
 @pytest.mark.asyncio
 async def test_runner_health_not_configured(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        f"DATA_DIR={tmp_path}\nMODE=paper\nLIVE_ORDERS=false\nSESSION_SECRET=test\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.delenv("ANGEL_API_KEY", raising=False)
-    monkeypatch.delenv("ANGEL_CLIENT_CODE", raising=False)
-    monkeypatch.delenv("ANGEL_PIN", raising=False)
-    monkeypatch.delenv("ANGEL_TOTP_SECRET", raising=False)
+    for key in ("ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET"):
+        monkeypatch.delenv(key, raising=False)
     reset_settings_cache()
 
     runner = EngineRunner()

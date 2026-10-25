@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """F1b: paper jobs write DB rows and match lab/backtest over 30 fixture days."""
 
 from __future__ import annotations
