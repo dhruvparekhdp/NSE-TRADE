@@ -132,3 +132,13 @@ The engine itself is not affected today (systemd sets TZ before the process star
 aware UTC datetime so it can never happen (ticket V0-9). No support email to Angel is needed.
 Still to do (owner): clear the terminal; rotate the MPIN and API key, which were printed to the terminal by the SDK's error log
 during one test, and re-issue the TOTP key, which was shared in chat; save the new values on /keys and run Test Angel once.
+
+## 2026-10-25 — Options on news (BTST / STBT) and delta hedging: paper research only
+
+Owner: "in my 8 years of stock market trading i always like btst for options ... depending on repo rate news or other
+news", "btst or stbt both", "even add delta hedging concept in system and also add backtest". Decision: new phase V9
+(`docs/PLAN_V9_OPTIONS.md`), modelled on the crypto engine's `analysis/vol_book.py`: Nifty (weekly, Tuesday expiry) and
+Bank Nifty (monthly only since Nov 2024) ATM options around scheduled events, unhedged and delta-hedged with index
+futures, plus sell vs buy hedged-straddle paper books. No order code path in any V9 module; no change to `mode` /
+`live_orders`. Work queue for Cursor: `docs/CURSOR_NEXT.md`.
+Also found: `config/policy_dates.json` holds the 2025 RBI MPC dates labelled 2026 (ticket C3).
