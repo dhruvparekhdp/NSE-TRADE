@@ -17,6 +17,34 @@ Do the groups in this order. Inside a group, tickets can go in any order.
 | V9 | Options on news + delta-hedged vol book | `feat/v9-options` | Owner's BTST/STBT trade and delta hedging; see `docs/PLAN_V9_OPTIONS.md` |
 | C6 | Live Angel WebSocket into `MultiBarFeed` | `feat/v8-live-1s` | V6-1 / V8-P2, still open in your V8 report |
 | C7 | News history (GDELT) for the event study | `feat/v8-event-study` | V8-P3 needs headlines back to 2020 |
+| C8 | Strategy rework after the backtests | `feat/c8-rework` | no strategy passes; new pre-registered trials |
+
+## Status on Monday 26 Oct 2026 (Claude, read-only check of the server at 01:30 IST)
+
+Safe and running: `mode=paper`, `live_orders=false`, service up (49 MB), 100 instruments, real Angel login job at
+08:45, 26 Oct is a trading day, crypto-engine untouched. The 16:10 `job_daily_bars` backfills 320 sessions on its
+first run (the lake holds only 5 probe files today), so the 16:20 scan has history from Monday on.
+
+What will NOT happen today, and the ticket that fixes it:
+| Gap | Effect today | Ticket |
+|---|---|---|
+| `strategies_enabled = []` | the scan logs shadow picks only; no paper trades open | owner decision (C8) |
+| Global cues use Yahoo (429 from the server) | Market mood empty | C2 |
+| Watchlist quotes use Yahoo | stale quotes for 20 names | C1 |
+| No live WebSocket feed | Book A shadow job only logs a line | C6 |
+| `policy_dates.json` has 2025 dates | RBI event flags wrong | C3 |
+| v8 branch has stub login and no hubs | v8 cannot be deployed | C0 |
+
+### C8. Strategy rework after the backtests (`feat/c8-rework`, after C5)
+
+Backtests (`docs/research/BACKTEST_2020_2026.md`): Book B works only in 2020-23 (second half ≈ 0 R); every Book A
+strategy loses after costs in FY 2025-26 and FY 2026-27, and none beats a random entry. Do not tune these on the same
+history. New pre-registered trials in `docs/PREREG.md`, each a ledger entry:
+- Book A cost floor: reject any signal whose round-trip cost exceeds 0.25 R (MIS round trip ≈ 0.14% of notional, so
+  the stop must be ≥ 0.56%); report how many signals survive per strategy.
+- Book B regime gate on trend strength (Nifty 50-day slope and breadth above the 50-day average) in place of F1/F2.
+- Paper book on the server: the owner decides whether to set `STRATEGIES_ENABLED=S6_swing,S6b_keltner` (paper,
+  filters on) to test the scan -> fill -> outcomes plumbing on live days. It is not evidence of an edge.
 
 ---
 
