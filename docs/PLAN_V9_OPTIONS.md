@@ -23,15 +23,17 @@ Worked example (Black-Scholes, Nifty 25,000, 7 days to expiry, IV 14%): ATM call
 unhedged / hedged: flat -8% / -8%; +0.5% +27% / -5%; +1% +68% / +5%; +2% +166% / +39%. The hedged straddle's
 break-even is an overnight move of about 0.85%, which is the bar every event has to clear.
 
-## 2. Backtest results (scratch study, 25 Oct 2026; diagnostic, NOT a gate result)
+## 2. Backtest results (round 1, 25 Oct 2026; diagnostic, NOT a gate result)
 
-Claude is running these on Angel data (daily 2019+, 1-min 2020+) on 25-26 Oct and will fill this section:
-- BTST / STBT call, put, straddle, trend on RBI (by cut / hike / hold), FOMC, Budget, election, exit polls; exits at
-  the next open and the next close; each against the same trade on every ordinary night.
-- The same trades delta-hedged at entry with index futures (overnight).
-- A dynamically hedged straddle (re-hedge on 1-min Nifty bars when |delta| > 0.10), every day, event vs ordinary,
-  with option / hedge / cost split and implied vs realised move.
-Treat every number as diagnostic until V9-3 re-runs it through `lab/evaluate.py` and the ledger.
+Full numbers: `docs/research/BACKTEST_2020_2026.md`. In short:
+- Nifty options are priced rich: VIX implied 1.08% a day vs 0.84% realised, every year 2020-26.
+- Selling a delta-hedged straddle for one day still loses (-5% of premium net): rare overnight gaps (+4.8%, -5.0%)
+  cannot be hedged, and re-hedging every 0.10 delta costs 3-4% of premium. Never use the 1-day-to-expiry weekly.
+- Buying the hedged straddle pays only on big scheduled shocks: Budget (+15.8% avg, n=8), election results, exit polls.
+- BTST ATM call into RBI day, exit at the next open (before the 10:00 decision): +7.6% vs +0.1% on ordinary nights,
+  positive in both halves. Budget-day put: +22%. FOMC: no directional edge.
+- These become the pre-registered V9-3 trials: wider band (0.20), next-weekly expiry, sell-to-expiry with a wing
+  (iron fly), event long-vol on Budget / election / exit poll, RBI BTST call exit at open.
 
 ## 3. What to build (tickets for Cursor, branch `feat/v9-options`)
 
