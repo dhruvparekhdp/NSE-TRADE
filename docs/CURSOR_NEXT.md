@@ -18,6 +18,7 @@ Do the groups in this order. Inside a group, tickets can go in any order.
 | C6 | Live Angel WebSocket into `MultiBarFeed` | `feat/v8-live-1s` | V6-1 / V8-P2, still open in your V8 report |
 | C7 | News history (GDELT) for the event study | `feat/v8-event-study` | V8-P3 needs headlines back to 2020 |
 | C8 | Strategy rework after the backtests | `feat/c8-rework` | no strategy passes; new pre-registered trials |
+| C10 | Market data store: 365 days in DB, older to JSON archive; file sources first | `feat/c10-store` | owner 26 Oct; Angel candle API rate-blocked the account |
 | C9 | Secure key entry (HTTPS / CLI) | `feat/c9-keys` | the Keys page cannot save over plain HTTP (403, by design); 26 Oct MPIN change needed SSH |
 
 ## Status on Monday 26 Oct 2026 (Claude, read-only check of the server at 01:30 IST)
@@ -64,6 +65,41 @@ one-off SSH script (hidden prompt -> `config.secrets_loader.save_key`) and resta
 - HTTPS for the portal (owner chooses: a domain + Let's Encrypt in nginx, or Tailscale). Until then the CLI is the
   supported path; the Keys page should say so instead of a bare 403.
 - Tests: CLI validation, re-read on login, the AB1007 stop rule.
+
+### C10. Market data store and sources (`feat/c10-store`; owner, 26 Oct 2026)
+
+Owner: "use socket and start storing new data ... other sources to get direct json or excel data, instead of api ...
+only keep 365 days data only in db, other data shifts to json file automatically".
+Why: on 26 Oct Angel refused every candle-history request for the account ("Access denied because of exceeding access
+rate", after the weekend history downloads), while its WebSocket and quote API kept working. The engine must not
+depend on the candle API for anything it can get from a file.
+
+**Sources (files first, APIs second)**
+| Data | Primary source | Fallback |
+|---|---|---|
+| Daily OHLCV + delivery, all NSE equities | NSE CM UDiFF bhavcopy zip, `nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_<YYYYMMDD>_F_0000.csv.zip` (works from the server; `data/history.parse_bhavcopy_zip`) | Angel ONE_DAY |
+| Index closes (Nifty 50, Bank, VIX) | NSE daily index close file in the archives (find the current URL; record it in DECISIONS) | NIFTYBEES from the bhavcopy (already used by `nifty_closes`) |
+| F&O (for V9) | NSE F&O UDiFF bhavcopy | none |
+| Live intraday | Angel WebSocket (C6) | Angel quote API, 1 call/s |
+| 1-min history gaps | Angel candle API after the close only: ≤ 1 request/s, stop on the FIRST rate error, never during market hours | none |
+| Pre-open, corporate actions, bulk/block deals, FII/DII | NSE JSON / CSV files from the archives | none |
+Bhavcopy appears around 18:00 IST; the EOD scan moves to after it (or runs at 16:20 on Angel and re-runs when bhav arrives,
+bhav wins on conflicts as `Lake.write_daily` already prefers it).
+
+**Storage: hot 365 days in the DB, older automatically to JSON**
+- DB (Postgres, already on the box): `bars_1d(symbol, date, o,h,l,c,v, delivery, source)` and
+  `bars_1m(symbol, ts_ms, o,h,l,c,v, ticks, source)` partitioned by month; UTC epoch ms (plan rule 7).
+- Nightly 19:30 IST `job_archive`: rows older than 365 days -> `var/archive/<tf>/<SYMBOL>/<YYYY-MM>.jsonl.gz`
+  (one JSON object per bar, gzip), verify row count + checksum, then delete from the DB in the same transaction.
+  Idempotent; never archives the current month; logs counts on Health.
+- `data/store.py: read_bars(symbol, tf, start, end)` reads DB + archive transparently; backtests and the live engine
+  use it (plan rule 5). The parquet lake becomes an import source only.
+- Size: 1-min bars ≈ 101 instruments x 375 x 250 ≈ 9.5 M rows/year in the DB; gzip JSON ≈ 200 MB/year archived.
+  Raw ticks are NOT stored (about 3 M/day); optional 1-second bars kept 5 days, never archived (owner decides).
+- Import on day one: Claude's `var/ws/bars_1m_<date>.jsonl` (recorder started 26 Oct 13:17), the backfilled lake
+  (`var/lake/bars_1d`, NSE bhav 24 Jun 2025 -> 23 Oct 2026), and later `var/bt/` Angel history files.
+- Tests: archive move + verify + delete, reader across the 365-day boundary, idempotent re-run, a crash between
+  write and delete loses nothing, memory under the 600 MB cap.
 
 ## C0. Merge `feat/v-fix-2-login` (e59c72c, LIVE on the server) into `feat/v8-complete`
 
