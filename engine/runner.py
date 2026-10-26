@@ -322,10 +322,10 @@ class EngineRunner:
         log.info("news job: start")
         try:
             from news.pipeline import refresh_and_score
-            from news.scrape import Headline
+            from news.scrape import fetch_all
 
-            headlines: list[Headline] = []
-            summary = refresh_and_score(headlines)
+            headlines = await asyncio.to_thread(fetch_all, None, None, log)  # was an empty list: nothing was fetched
+            summary = await asyncio.to_thread(refresh_and_score, headlines)
             log.info(
                 "news job: done india=%s macro=%s score=%.3f",
                 summary.get("n_india"),
