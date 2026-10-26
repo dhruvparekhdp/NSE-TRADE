@@ -18,6 +18,7 @@ Do the groups in this order. Inside a group, tickets can go in any order.
 | C6 | Live Angel WebSocket into `MultiBarFeed` | `feat/v8-live-1s` | V6-1 / V8-P2, still open in your V8 report |
 | C7 | News history (GDELT) for the event study | `feat/v8-event-study` | V8-P3 needs headlines back to 2020 |
 | C8 | Strategy rework after the backtests | `feat/c8-rework` | no strategy passes; new pre-registered trials |
+| C9 | Secure key entry (HTTPS / CLI) | `feat/c9-keys` | the Keys page cannot save over plain HTTP (403, by design); 26 Oct MPIN change needed SSH |
 
 ## Status on Monday 26 Oct 2026 (Claude, read-only check of the server at 01:30 IST)
 
@@ -47,6 +48,22 @@ history. New pre-registered trials in `docs/PREREG.md`, each a ledger entry:
   filters on) to test the scan -> fill -> outcomes plumbing on live days. It is not evidence of an edge.
 
 ---
+
+### C9. Secure key entry (`feat/c9-keys`, do soon)
+
+26 Oct 2026: the owner reset the Angel MPIN; the Keys page returned 403 because `require_secure_channel` (R3)
+refuses secret saves over plain `http://52.62.37.4`, and Test Angel is refused the same way. Claude saved it with a
+one-off SSH script (hidden prompt -> `config.secrets_loader.save_key`) and restarted nse-engine after 15:45.
+- `scripts/set_key.py <key>`: hidden prompt twice, validates per field (MPIN 4 digits, TOTP base32, ...), calls
+  `save_key`, prints the masked value + fingerprint; documented in `docs/RUNBOOK.md` with the SSH one-liner.
+- The engine must pick up a changed key without a restart: `_ensure_login` re-reads DB secrets (cheap) before
+  each login attempt, and records which fingerprint it used.
+- Login failures must stop early: after 2 consecutive AB1007 "INVALID MPIN" today, skip further automatic login
+  attempts until the key changes (5 bad tries lock the account; 26 Oct burned attempts 2-4 at 08:45-08:55).
+  Show the state on Health.
+- HTTPS for the portal (owner chooses: a domain + Let's Encrypt in nginx, or Tailscale). Until then the CLI is the
+  supported path; the Keys page should say so instead of a bare 403.
+- Tests: CLI validation, re-read on login, the AB1007 stop rule.
 
 ## C0. Merge `feat/v-fix-2-login` (e59c72c, LIVE on the server) into `feat/v8-complete`
 
