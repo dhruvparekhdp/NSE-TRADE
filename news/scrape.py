@@ -55,6 +55,19 @@ def fetch_feed(url: str, source: str, timeout: float = 15.0) -> list[Headline]:
     return parse_rss(raw, source)
 
 
+def fetch_all(feeds: list[tuple[str, str]] | None = None, fetch: Any = None, log: Any = None) -> list[Headline]:
+    """Every feed in turn; one failing feed is logged and skipped, never fatal (job_news runs every 15 min)."""
+    fetch = fetch or fetch_feed
+    out: list[Headline] = []
+    for source, url in feeds if feeds is not None else DEFAULT_FEEDS:
+        try:
+            out.extend(fetch(url, source))
+        except Exception as exc:  # noqa: BLE001 - network / XML problems from one source
+            if log is not None:
+                log.warning("news feed %s failed: %s", source, exc)
+    return out
+
+
 def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
@@ -96,6 +109,9 @@ def ingest_headlines(
         }
         for h in headlines
     ]
+    # The same feed items come back every 15 minutes: keep only ones not already stored locally.
+    seen = {r.get("external_id") or r.get("link") or r.get("title") for r in read_jsonl(local_path, limit=5000)}
+    rows = [r for r in rows if (r["external_id"] or r["link"] or r["title"]) not in seen]
     if rows:
         append_jsonl(local_path, rows)
         if shared_path is not None:

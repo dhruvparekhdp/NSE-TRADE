@@ -322,15 +322,10 @@ class EngineRunner:
         log.info("news job: start")
         try:
             from news.pipeline import refresh_and_score
-            from news.scrape import DEFAULT_FEEDS, Headline, fetch_feed
+            from news.scrape import fetch_all
             from scripts.refresh_news_scores import process_headlines
 
-            headlines: list[Headline] = []
-            for source, url in DEFAULT_FEEDS:
-                try:
-                    headlines.extend(fetch_feed(url, source))
-                except OSError:
-                    continue
+            headlines = await asyncio.to_thread(fetch_all, None, None, log)
             events_path = self.data_dir / "news" / "events.jsonl"
             ev_stats = await asyncio.to_thread(
                 process_headlines,
@@ -338,7 +333,7 @@ class EngineRunner:
                 out_path=events_path,
                 use_llm=False,
             )
-            summary = refresh_and_score(headlines)
+            summary = await asyncio.to_thread(refresh_and_score, headlines)
             log.info(
                 "news job: done events=%s india=%s macro=%s score=%.3f",
                 ev_stats.get("ingested"),
