@@ -23,6 +23,8 @@ REASONS: dict[str, str] = {
     "market_filter_f2_trend": "Nifty below its 200-day average",
     "mis_exposure": "intraday exposure is at its cap",
     "symbol_open": "already holding this stock",
+    "already_in_symbol": "another strategy already queued or holds this stock",
+    "cash": "not enough cash for this buy and its charges",
     "spread_wide": "bid-ask spread too wide to trade cheaply",
     "near_circuit": "too close to today's price band",
     "results_day": "results due within 3 days",

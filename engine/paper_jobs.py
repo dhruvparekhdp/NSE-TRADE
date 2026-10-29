@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from config.settings import get_settings
+from config.settings import get_setting, get_settings
 from core.exits import ExitRules, Position, fill_entry, step_exits, virtual_outcome
 from core.indicators import atr as atr_series
 from core.risk import PortfolioState, can_open, limits_from_settings, on_swing_close, on_swing_open, size
@@ -59,6 +59,7 @@ def nifty_closes(lake: Lake, end: date) -> list[float]:
 
 
 def load_portfolio_state(conn: sqlite3.Connection, *, capital: float = 100_000.0) -> PortfolioState:
+    """Open holdings plus pending CNC orders both reserve swing slots (C17.1)."""
     state = PortfolioState(capital=capital, start_capital=capital)
     sector_map = load_sector_map() or None
     for row in conn.execute("SELECT symbol, qty FROM holdings WHERE qty > 0"):
@@ -66,7 +67,80 @@ def load_portfolio_state(conn: sqlite3.Connection, *, capital: float = 100_000.0
         state.open_symbols.add(sym)
         state.open_swing += 1
         on_swing_open(state, sym, sector_map)
+    for row in conn.execute("SELECT symbol FROM pending_orders WHERE status='pending'"):
+        sym = str(row["symbol"]).upper()
+        if sym in state.open_symbols:
+            continue
+        state.open_symbols.add(sym)
+        state.open_swing += 1
+        on_swing_open(state, sym, sector_map)
     return state
+
+
+def _reserve_swing_slot(state: PortfolioState, symbol: str, sector_map: dict[str, str] | None) -> None:
+    sym = symbol.upper()
+    if sym in (state.open_symbols or set()):
+        return
+    state.open_symbols.add(sym)
+    state.open_swing += 1
+    on_swing_open(state, sym, sector_map)
+
+
+def market_filter_mode() -> str:
+    """on (PREREG F1/F2) | off (paper compare) | shadow (log only). C13."""
+    return str(get_setting("market_filter", "on")).lower()
+
+
+def f1_f2_reasons(closes_nifty: list[float]) -> tuple[str | None, str | None]:
+    if len(closes_nifty) < 273:
+        return None, None
+    f1 = f1_skip_reason(closes_nifty)
+    f2 = f2_skip_reason(closes_nifty) if not f1 else None
+    return f1, f2
+
+
+def daily_bars_ready(
+    lake: Lake,
+    trade_date: date,
+    probes: tuple[str, ...] = ("NIFTYBEES", "SBIN", "RELIANCE"),
+) -> bool:
+    """False until today's daily bar is in the lake (C17.4 — fill/scan after job_daily_bars)."""
+    for sym in probes:
+        bars = daily_bars_upto(lake, sym, trade_date)
+        if not bars:
+            continue
+        bar_d = datetime.fromtimestamp(bars[-1].ts_ms / 1000, tz=IST).date()
+        if bar_d == trade_date:
+            return True
+    return False
+
+
+def _cnc_buy_cash_needed(buy_value: float, slippage_pct: float = 0.05) -> float:
+    from core.costs import order_brokerage, rates_for
+
+    rates = rates_for("CNC")
+    brok = order_brokerage(buy_value, rates)
+    stt = buy_value * rates.stt_buy_pct / 100.0
+    exchange = buy_value * rates.exchange_pct / 100.0
+    sebi = buy_value * rates.sebi_pct / 100.0
+    stamp = buy_value * rates.stamp_buy_pct / 100.0
+    gst = (brok + exchange + sebi) * rates.gst_pct / 100.0
+    slip = buy_value * slippage_pct / 100.0
+    return round(buy_value + brok + stt + exchange + sebi + stamp + gst + slip + 1e-9, 2)
+
+
+def _cnc_sell_cash_credit(sell_value: float, slippage_pct: float = 0.05) -> float:
+    from core.costs import order_brokerage, rates_for
+
+    rates = rates_for("CNC")
+    brok = order_brokerage(sell_value, rates)
+    stt = sell_value * rates.stt_sell_pct / 100.0
+    exchange = sell_value * rates.exchange_pct / 100.0
+    sebi = sell_value * rates.sebi_pct / 100.0
+    gst = (brok + exchange + sebi) * rates.gst_pct / 100.0
+    dp = rates.dp_inr * (1.0 + rates.dp_gst_pct / 100.0) if rates.dp_inr else 0.0
+    slip = sell_value * slippage_pct / 100.0
+    return round(sell_value - (brok + stt + exchange + sebi + gst + dp + slip) + 1e-9, 2)
 
 
 def ensure_paper_cycle(conn: sqlite3.Connection, capital: float = 100_000.0) -> None:
@@ -112,19 +186,28 @@ def job_scan(
     symbols: list[str] | None = None,
     write: bool = True,
 ) -> list[dict[str, Any]]:
-    """16:20 scan on closed daily bars; F1/F2 skip reasons logged on picks."""
+    """16:20 scan on closed daily bars; market_filter controls F1/F2 (C13)."""
+    syms = symbols or [r[0] for r in conn.execute("SELECT symbol FROM instruments WHERE in_universe=1").fetchall()]
+    if not syms:
+        syms = symbols or []
+    bar_probes = tuple(dict.fromkeys([*syms, "NIFTYBEES", "SBIN", "RELIANCE"]))
+    if not daily_bars_ready(lake, trade_date, bar_probes):
+        return []
     settings = get_settings()
     limits = limits_from_settings(settings)
     sector_map = load_sector_map() or None
     state = load_portfolio_state(conn, capital=_wallet(conn))
-    syms = symbols or [r[0] for r in conn.execute("SELECT symbol FROM instruments WHERE in_universe=1").fetchall()]
-    if not syms:
-        syms = symbols or []
     closes_nifty = nifty_closes(lake, trade_date)
     next_td = next_trading_day(trade_date)
     next_iso = next_td.isoformat()
     scan_iso = trade_date.isoformat()
+    mf = market_filter_mode()
+    filter_on = mf == "on"
+    filter_off = mf == "off"
+    filter_shadow = mf == "shadow"
     out: list[dict[str, Any]] = []
+
+    f1, f2 = f1_f2_reasons(closes_nifty)
 
     for sym in syms:
         bars = daily_bars_upto(lake, sym, trade_date)
@@ -133,10 +216,6 @@ def job_scan(
         bar = bars[-1]
         decision_ms = daily_bar_close_ms(bar.ts_ms) + 1_000
         ctx = Context(trade_date=scan_iso)
-        f1 = f2 = None
-        if len(closes_nifty) >= 273:
-            f1 = f1_skip_reason(closes_nifty)
-            f2 = f2_skip_reason(closes_nifty) if not f1 else None
 
         for strat in strategies_for_scan(enabled):
             sigs = scan_book_b_day(
@@ -149,44 +228,63 @@ def job_scan(
                 ctx=ctx,
             )
             for sig in sigs:
-                decision = "shadow" if not (enabled or []) else "logged"
+                decision = "shadow" if not (enabled or []) or filter_shadow else "logged"
                 skip = None
+                would_skip: str | None = None
+                if filter_on and f1:
+                    would_skip = f1
+                elif filter_on and f2:
+                    would_skip = f2
+                elif filter_off and f1:
+                    would_skip = f1
+                elif filter_off and f2:
+                    would_skip = f2
+
                 if sig.role == "pick":
-                    if f1:
-                        skip = f1
-                    elif f2:
-                        skip = f2
+                    if filter_shadow:
+                        skip = would_skip or "market_filter_shadow"
+                        decision = "shadow"
+                    elif filter_on and would_skip:
+                        skip = would_skip
                     else:
-                        ok, reason = can_open(state, sig, limits, decision_ms, sector_map=sector_map)
-                        if not ok:
-                            skip = reason
+                        sym_up = sym.upper()
+                        if sym_up in (state.open_symbols or set()):
+                            skip = "already_in_symbol"
                         else:
-                            sz = size(
-                                sig.entry_ref,
-                                sig.stop,
-                                state.capital,
-                                limits.risk_per_trade_pct,
-                                0.05,
-                                "B",
-                                limits,
-                            )
-                            if sz.qty <= 0:
-                                skip = sz.reason
-                            elif write:
-                                persist_pending(
-                                    conn,
-                                    trade_date=next_iso,
-                                    symbol=sym,
-                                    strategy=sig.strategy,
-                                    side=sig.side,
-                                    qty=sz.qty,
-                                    limit_price=sig.entry_ref,
-                                    stop=sig.stop,
-                                    target=sig.target,
-                                    created_ms=decision_ms,
+                            ok, reason = can_open(state, sig, limits, decision_ms, sector_map=sector_map)
+                            if not ok:
+                                skip = "already_in_symbol" if reason == "symbol_open" else reason
+                            else:
+                                sz = size(
+                                    sig.entry_ref,
+                                    sig.stop,
+                                    state.capital,
+                                    limits.risk_per_trade_pct,
+                                    0.05,
+                                    "B",
+                                    limits,
                                 )
-                                decision = "pending"
-                sig.features = {**(sig.features or {}), "decision": decision, "skip_reason": skip}
+                                if sz.qty <= 0:
+                                    skip = sz.reason
+                                elif write and not filter_shadow:
+                                    persist_pending(
+                                        conn,
+                                        trade_date=next_iso,
+                                        symbol=sym,
+                                        strategy=sig.strategy,
+                                        side=sig.side,
+                                        qty=sz.qty,
+                                        limit_price=sig.entry_ref,
+                                        stop=sig.stop,
+                                        target=sig.target,
+                                        created_ms=decision_ms,
+                                    )
+                                    decision = "pending"
+                                    _reserve_swing_slot(state, sym, sector_map)
+                feat = {**(sig.features or {}), "decision": decision, "skip_reason": skip}
+                if would_skip and filter_off and sig.role == "pick" and decision == "pending":
+                    feat["would_skip_reason"] = would_skip
+                sig.features = feat
                 row = {
                     "trade_date": scan_iso,
                     "symbol": sym,
@@ -194,6 +292,7 @@ def job_scan(
                     "role": sig.role,
                     "decision": decision,
                     "skip_reason": skip,
+                    "would_skip_reason": feat.get("would_skip_reason"),
                 }
                 out.append(row)
             if write and sigs:
@@ -225,7 +324,8 @@ def _close_open_trade(conn: sqlite3.Connection, tr_id: int, sym: str, px: float,
     sector_map = load_sector_map() or None
     st = load_portfolio_state(conn)
     on_swing_close(st, sym, sector_map)
-    _bump_wallet(conn, net)
+    sell_v = px * qty
+    _bump_wallet(conn, _cnc_sell_cash_credit(sell_v))
     return net
 
 
@@ -236,6 +336,8 @@ def job_eod_fill(
     trade_date: date,
 ) -> list[dict[str, Any]]:
     """16:15 manage open CNC positions and fill pending entries on today's bar."""
+    if not daily_bars_ready(lake, trade_date, ("NIFTYBEES", "SBIN", "RELIANCE")):
+        return []
     ensure_paper_cycle(conn)
     iso = trade_date.isoformat()
     pending = load_pending_signals(conn, iso)
@@ -303,7 +405,17 @@ def job_eod_fill(
         if sz.qty <= 0:
             results.append({"symbol": sig.symbol, "status": sz.reason})
             continue
+        buy_v = fill.price * sz.qty
+        need = _cnc_buy_cash_needed(buy_v)
+        if _wallet(conn) + 1e-6 < need:
+            conn.execute(
+                "UPDATE pending_orders SET status='no_fill' WHERE trade_date=? AND symbol=? AND status='pending'",
+                (iso, sig.symbol),
+            )
+            results.append({"symbol": sig.symbol, "status": "cash", "reason": "cash"})
+            continue
         ms = fill.ts_ms
+        _bump_wallet(conn, -need)
         conn.execute(
             "INSERT INTO trades(signal_id, symbol, book, strategy, side, qty, entry_ms, entry_price, "
             "stop_init, stop_now, target, mode, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
