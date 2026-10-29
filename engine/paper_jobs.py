@@ -58,16 +58,36 @@ def nifty_closes(lake: Lake, end: date) -> list[float]:
     return []
 
 
-def load_portfolio_state(conn: sqlite3.Connection, *, capital: float = 100_000.0) -> PortfolioState:
-    """Open holdings plus pending CNC orders both reserve swing slots (C17.1)."""
-    state = PortfolioState(capital=capital, start_capital=capital)
+def equity_at_cost(conn: sqlite3.Connection) -> float:
+    """Cash + open holdings at cost — sizing capital after wallet debits (C17 follow-up)."""
+    held = 0.0
+    for row in conn.execute("SELECT qty, avg_price FROM holdings WHERE qty > 0"):
+        held += int(row["qty"]) * float(row["avg_price"])
+    return _wallet(conn) + held
+
+
+def load_portfolio_state(
+    conn: sqlite3.Connection,
+    *,
+    capital: float | None = None,
+    pending_after: date | None = None,
+) -> PortfolioState:
+    """Open holdings plus future pending orders reserve swing slots (C17.1)."""
+    cap = equity_at_cost(conn) if capital is None else capital
+    state = PortfolioState(capital=cap, start_capital=cap)
     sector_map = load_sector_map() or None
     for row in conn.execute("SELECT symbol, qty FROM holdings WHERE qty > 0"):
         sym = str(row["symbol"]).upper()
         state.open_symbols.add(sym)
         state.open_swing += 1
         on_swing_open(state, sym, sector_map)
-    for row in conn.execute("SELECT symbol FROM pending_orders WHERE status='pending'"):
+    after_iso = pending_after.isoformat() if pending_after else None
+    q = "SELECT symbol FROM pending_orders WHERE status='pending'"
+    params: tuple[Any, ...] = ()
+    if after_iso is not None:
+        q += " AND trade_date > ?"
+        params = (after_iso,)
+    for row in conn.execute(q, params):
         sym = str(row["symbol"]).upper()
         if sym in state.open_symbols:
             continue
@@ -75,6 +95,45 @@ def load_portfolio_state(conn: sqlite3.Connection, *, capital: float = 100_000.0
         state.open_swing += 1
         on_swing_open(state, sym, sector_map)
     return state
+
+
+def _ensure_paper_runs(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS paper_runs ("
+        "trade_date TEXT NOT NULL, job TEXT NOT NULL, completed_ms INTEGER NOT NULL, "
+        "PRIMARY KEY (trade_date, job))"
+    )
+
+
+def paper_run_done(conn: sqlite3.Connection, trade_date: date, job: str) -> bool:
+    _ensure_paper_runs(conn)
+    row = conn.execute(
+        "SELECT 1 FROM paper_runs WHERE trade_date=? AND job=?",
+        (trade_date.isoformat(), job),
+    ).fetchone()
+    return row is not None
+
+
+def paper_run_mark(conn: sqlite3.Connection, trade_date: date, job: str) -> None:
+    _ensure_paper_runs(conn)
+    ms = int(datetime.now(tz=IST).timestamp() * 1000)
+    conn.execute(
+        "INSERT OR REPLACE INTO paper_runs(trade_date, job, completed_ms) VALUES (?,?,?)",
+        (trade_date.isoformat(), job, ms),
+    )
+
+
+def _finalize_pending(
+    conn: sqlite3.Connection,
+    *,
+    trade_date_iso: str,
+    symbol: str,
+    status: str,
+) -> None:
+    conn.execute(
+        "UPDATE pending_orders SET status=? WHERE trade_date=? AND symbol=? AND status='pending'",
+        (status, trade_date_iso, symbol),
+    )
 
 
 def _reserve_swing_slot(state: PortfolioState, symbol: str, sector_map: dict[str, str] | None) -> None:
@@ -193,10 +252,12 @@ def job_scan(
     bar_probes = tuple(dict.fromkeys([*syms, "NIFTYBEES", "SBIN", "RELIANCE"]))
     if not daily_bars_ready(lake, trade_date, bar_probes):
         return []
+    if write and paper_run_done(conn, trade_date, "scan"):
+        return []
     settings = get_settings()
     limits = limits_from_settings(settings)
     sector_map = load_sector_map() or None
-    state = load_portfolio_state(conn, capital=_wallet(conn))
+    state = load_portfolio_state(conn, pending_after=trade_date)
     closes_nifty = nifty_closes(lake, trade_date)
     next_td = next_trading_day(trade_date)
     next_iso = next_td.isoformat()
@@ -297,6 +358,9 @@ def job_scan(
                 out.append(row)
             if write and sigs:
                 persist_signals(conn, sigs, scan_iso)
+    if write:
+        paper_run_mark(conn, trade_date, "scan")
+        conn.commit()
     return out
 
 
@@ -337,6 +401,8 @@ def job_eod_fill(
 ) -> list[dict[str, Any]]:
     """16:15 manage open CNC positions and fill pending entries on today's bar."""
     if not daily_bars_ready(lake, trade_date, ("NIFTYBEES", "SBIN", "RELIANCE")):
+        return []
+    if paper_run_done(conn, trade_date, "eod_fill"):
         return []
     ensure_paper_cycle(conn)
     iso = trade_date.isoformat()
@@ -389,29 +455,26 @@ def job_eod_fill(
     for sig in pending:
         bars = daily_bars_upto(lake, sig.symbol, trade_date)
         if not bars:
+            _finalize_pending(conn, trade_date_iso=iso, symbol=sig.symbol, status="no_bar")
             results.append({"symbol": sig.symbol, "status": "no_bar"})
             continue
         bar = bars[-1]
         fill = fill_entry(sig, bar, rules)
         if fill is None:
-            conn.execute(
-                "UPDATE pending_orders SET status='no_fill' WHERE trade_date=? AND symbol=? AND status='pending'",
-                (iso, sig.symbol),
-            )
+            _finalize_pending(conn, trade_date_iso=iso, symbol=sig.symbol, status="no_fill")
             results.append({"symbol": sig.symbol, "status": "no_fill"})
             continue
         limits = limits_from_settings(settings)
-        sz = size(fill.price, sig.stop, _wallet(conn), limits.risk_per_trade_pct, 0.05, "B", limits)
+        eq = equity_at_cost(conn)
+        sz = size(fill.price, sig.stop, eq, limits.risk_per_trade_pct, 0.05, "B", limits)
         if sz.qty <= 0:
+            _finalize_pending(conn, trade_date_iso=iso, symbol=sig.symbol, status=sz.reason or "qty_zero")
             results.append({"symbol": sig.symbol, "status": sz.reason})
             continue
         buy_v = fill.price * sz.qty
         need = _cnc_buy_cash_needed(buy_v)
         if _wallet(conn) + 1e-6 < need:
-            conn.execute(
-                "UPDATE pending_orders SET status='no_fill' WHERE trade_date=? AND symbol=? AND status='pending'",
-                (iso, sig.symbol),
-            )
+            _finalize_pending(conn, trade_date_iso=iso, symbol=sig.symbol, status="cash")
             results.append({"symbol": sig.symbol, "status": "cash", "reason": "cash"})
             continue
         ms = fill.ts_ms
@@ -448,6 +511,7 @@ def job_eod_fill(
         st = load_portfolio_state(conn)
         on_swing_open(st, sig.symbol, sector_map)
         results.append({"symbol": sig.symbol, "status": "filled", "qty": sz.qty, "price": fill.price})
+    paper_run_mark(conn, trade_date, "eod_fill")
     conn.commit()
     return results
 

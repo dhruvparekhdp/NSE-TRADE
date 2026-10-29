@@ -17,6 +17,7 @@ from engine.paper_jobs import (
     _wallet,
     daily_bars_ready,
     ensure_paper_cycle,
+    equity_at_cost,
     job_eod_fill,
     job_scan,
     load_portfolio_state,
@@ -226,6 +227,8 @@ def test_fill_debits_wallet_and_refuses_cash(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "engine.paper_jobs.size", lambda *a, **k: SizeResult(10, 1000.0, "ok")
     )
+    conn.execute("DELETE FROM paper_runs WHERE trade_date=? AND job='eod_fill'", (d1.isoformat(),))
+    conn.commit()
     bad = job_eod_fill(conn, lake, trade_date=d1)
     assert any(r.get("status") == "cash" for r in bad)
 
@@ -320,3 +323,100 @@ def test_daily_bars_ready_probe(tmp_path):
     assert not daily_bars_ready(lake, d)
     _write_daily(lake, "NIFTYBEES", d)
     assert daily_bars_ready(lake, d)
+
+
+def test_second_fill_sizes_on_equity_not_depleted_cash(tmp_path, monkeypatch):
+    """After ~21k buy on 1L, slot must still clear ₹20k CNC floor (equity ≈ 1L)."""
+    import strategies.registry as reg
+    from config.settings import get_settings
+    from core.risk import limits_from_settings, size
+
+    reg.ALL["S_a"] = _Pick()
+    d0 = date(2026, 10, 26)
+    d1 = d0 + timedelta(days=1)
+    while d1.weekday() >= 5:
+        d1 += timedelta(days=1)
+    lake = Lake(tmp_path / "lake")
+    _two_day_lake(lake, "A", d0, 2500.0)
+    _two_day_lake(lake, "B", d0, 2500.0)
+    _write_daily(lake, "A", d1, 2500.0)
+    _write_daily(lake, "B", d1, 2500.0)
+    _write_daily(lake, "NIFTYBEES", d1, 100.0)
+    conn = init_db(tmp_path / "e.db")
+    for sym in ("A", "B"):
+        conn.execute(
+            "INSERT INTO instruments(symbol, token, tick_size, lot_size, in_universe, updated_ms) VALUES (?,?,?,?,?,?)",
+            (sym, "1", 0.05, 1, 1, 1),
+        )
+    conn.commit()
+    monkeypatch.setattr("engine.paper_jobs.f1_skip_reason", lambda *a, **k: None)
+    monkeypatch.setattr("engine.paper_jobs.f2_skip_reason", lambda *a, **k: None)
+    monkeypatch.setattr("engine.paper_jobs.load_sector_map", lambda: None)
+    set_runtime_override("market_filter", "off")
+    ensure_paper_cycle(conn)
+    job_scan(conn, lake, trade_date=d0, enabled=["S_a"], symbols=["A", "B"], write=True)
+    fills = job_eod_fill(conn, lake, trade_date=d1)
+    assert any(f.get("status") == "filled" for f in fills)
+    eq = equity_at_cost(conn)
+    assert eq > 95_000
+    lim = limits_from_settings(get_settings())
+    sz = size(2500.0, 2500.0 * 0.95, eq, lim.risk_per_trade_pct, 0.05, "B", lim)
+    assert sz.qty > 0 and sz.value >= lim.min_position_cnc_inr - 1.0
+    assert sum(1 for f in fills if f.get("status") == "filled") >= 2
+    fills2 = job_eod_fill(conn, lake, trade_date=d1)
+    assert not fills2
+
+
+def test_pending_sizing_failure_does_not_reserve_slot(tmp_path, monkeypatch):
+    from core.types import SizeResult
+
+    d1 = date(2026, 10, 27)
+    lake = Lake(tmp_path / "lake")
+    _write_daily(lake, "Y", d1, 100.0)
+    _write_daily(lake, "NIFTYBEES", d1, 100.0)
+    conn = init_db(tmp_path / "e.db")
+    ensure_paper_cycle(conn)
+    conn.execute(
+        "INSERT INTO pending_orders(trade_date, symbol, book, strategy, side, qty, limit_price, "
+        "stop, target, status, created_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (d1.isoformat(), "Y", "B", "S_a", 1, 10, 100.0, 95.0, None, "pending", 1),
+    )
+    conn.commit()
+    monkeypatch.setattr("engine.paper_jobs.size", lambda *a, **k: SizeResult(0, 0.0, "below_min_cnc_position"))
+    job_eod_fill(conn, lake, trade_date=d1)
+    row = conn.execute("SELECT status FROM pending_orders WHERE symbol='Y'").fetchone()
+    assert row["status"] == "below_min_cnc_position"
+    st = load_portfolio_state(conn, pending_after=d1)
+    assert st.open_swing == 0
+
+
+def test_eod_fill_and_scan_idempotent_per_date(tmp_path, monkeypatch):
+    import strategies.registry as reg
+
+    reg.ALL["S_a"] = _Pick()
+    d = date(2026, 10, 26)
+    lake = Lake(tmp_path / "lake")
+    _two_day_lake(lake, "X", d, 2500.0)
+    conn = init_db(tmp_path / "e.db")
+    conn.execute(
+        "INSERT INTO instruments(symbol, token, tick_size, lot_size, in_universe, updated_ms) VALUES (?,?,?,?,?,?)",
+        ("X", "1", 0.05, 1, 1, 1),
+    )
+    conn.commit()
+    monkeypatch.setattr("engine.paper_jobs.f1_skip_reason", lambda *a, **k: None)
+    monkeypatch.setattr("engine.paper_jobs.load_sector_map", lambda: None)
+    set_runtime_override("market_filter", "off")
+
+    def snap():
+        return (
+            conn.execute("SELECT COUNT(*) AS n FROM signals").fetchone()["n"],
+            conn.execute("SELECT COUNT(*) AS n FROM pending_orders").fetchone()["n"],
+            conn.execute("SELECT COUNT(*) AS n FROM trades").fetchone()["n"],
+        )
+
+    job_eod_fill(conn, lake, trade_date=d)
+    job_scan(conn, lake, trade_date=d, enabled=["S_a"], symbols=["X"], write=True)
+    once = snap()
+    job_eod_fill(conn, lake, trade_date=d)
+    job_scan(conn, lake, trade_date=d, enabled=["S_a"], symbols=["X"], write=True)
+    assert snap() == once
