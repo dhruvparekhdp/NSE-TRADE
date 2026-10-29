@@ -35,6 +35,7 @@ The two cron lines carry the comment "remove when ticket C6 lands". Removing the
 | # | Group | Branch | Why |
 |---|---|---|---|
 | C11 | Bring the four deployed fixes into your line | `feat/v8-complete` | otherwise the next deploy undoes them |
+| C17 | Paper book correctness (limits, one position per stock, cash, job order) | `feat/c17-paper-book` | replay 30 Oct: 6 positions with limit 4, DRREDDY bought twice, wallet never debited |
 | C13 | Wire `market_filter` into the scan; truthful badge | `feat/c13-filter` | portal says FILTER OFF while F1/F2 block everything |
 | C6 | Live Angel WebSocket inside the engine | `feat/v8-live-1s` | retire the recorder + signal stopgaps; Book A on live bars from 09:15 |
 | C12 | Book A paper execution (intraday) | `feat/c12-book-a-paper` | owner wants paper trades from the intraday signals |
@@ -61,6 +62,30 @@ Files: `web/test_angel.py`, `data/nse_http.py`, `web/portal_data.py`, `data/preo
 Acceptance: all those tests pass on your branch; `git diff origin/deploy/20261026 -- <those files>` shows only your
 additions; `pytest -q` / `ruff check .` green. Also open the PR for `fix/monotonic-cooldown` -> main (CI has failed on
 main since 24 Oct for that reason).
+
+## C17. Paper book correctness (do with C13; both are needed before the first paper trade)
+
+Found 30 Oct 2026 by replaying the engine's own `job_eod_fill` + `job_scan` for 26-29 Oct on a copy of the server's
+`engine.db` and daily lake (`scripts/stopgap/replay_paper.py`). With the filter ON it reproduces production exactly
+(26 picks, all `market_filter_f1_vol`, 0 trades). With F1/F2 OFF:
+```
+26 Oct  picks=6  decisions={'pending': 6}
+27 Oct  fills=6  (TECHM 12, TCS 8, DRREDDY 16, DRREDDY 16, HCLTECH 15, WIPRO 107)  then max_open_swing blocks everything
+holdings: 5 symbols (DRREDDY 32 shares), trades 6, wallet 100,000.00
+```
+Bugs (each needs a failing test first):
+1. **max_open_swing (4) not enforced inside one scan.** `job_scan` loads `PortfolioState` once; queued pending orders
+   do not count, so 6 were queued and filled. Count pending + open, and increment the state as each order is queued.
+2. **Same stock twice.** S6_swing and S6b_keltner both picked DRREDDY -> two orders, 32 shares. One open-or-pending
+   position per symbol (first strategy in a fixed order wins; the other is logged `skip_reason="already_in_symbol"`).
+3. **Cash never debited.** `_bump_wallet` runs only on exits (line ~228), so ₹1.19 L of stock was bought from a ₹1 L
+   wallet that still reads ₹1,00,000, and the portal's equity (wallet + held value) double-counts. Debit cost + buy
+   charges at fill, credit proceeds - charges at exit; refuse a fill without enough cash (`skip_reason="cash"`).
+   Equity = cash + marked holdings.
+4. **Job order race.** 29 Oct: `job_daily_bars` (16:10) finished at 16:15:15, after `job_eod_fill` (16:15:00) ran. Make
+   fill and scan wait for today's bars (run them as one chain after daily bars, or check the bar date and retry).
+Acceptance: the replay with the filter off ends with ≤ 4 holdings, no duplicate symbol, cash + holdings = ₹1 L +/-
+costs, and every skip has a reason; with the filter on it is unchanged.
 
 ## C13. Wire the `market_filter` setting into the scan
 
