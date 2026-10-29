@@ -1,3 +1,4 @@
+# ruff: noqa  -- reference copy of a server stopgap (scripts/stopgap/README in docs/CURSOR_NEXT.md); not engine code
 """Rebuild today's morning 1-min bars from NSE's intraday chart JSON (price only), for instruments that have no
 Angel backfill. Angel's candle API is rate-blocked for the account (26-28 Oct 2026); the WebSocket recorder only has
 bars from its start. NSE gives ~1 price per minute: bar o = previous price, c = this price, h/l = max/min of the two,

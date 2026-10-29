@@ -1,3 +1,4 @@
+# ruff: noqa  -- reference copy of a server stopgap (scripts/stopgap/README in docs/CURSOR_NEXT.md); not engine code
 """Angel WebSocket recorder (stopgap until ticket C6 puts this in the engine). Never places an order.
 
 Subscribes the Nifty 100 + NIFTY 50 / NIFTY BANK / INDIA VIX in QUOTE mode, builds 1-minute bars from ticks

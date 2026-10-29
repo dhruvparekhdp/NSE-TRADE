@@ -1,3 +1,4 @@
+# ruff: noqa  -- reference copy of a server stopgap (scripts/stopgap/README in docs/CURSOR_NEXT.md); not engine code
 """Live Book A SHADOW signals from the recorder's 1-min bars (stopgap until ticket C6). Never places an order.
 
 Every minute until 14:55 IST: read today's bars (var/ws/bars_1m_<day>_backfill.jsonl from Angel candles, then

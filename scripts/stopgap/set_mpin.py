@@ -1,3 +1,4 @@
+# ruff: noqa  -- reference copy of a server stopgap (scripts/stopgap/README in docs/CURSOR_NEXT.md); not engine code
 import getpass, os, sys
 from pathlib import Path
 sys.path.insert(0, os.getcwd())
