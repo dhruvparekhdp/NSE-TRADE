@@ -1,41 +1,76 @@
-# CURSOR NEXT: the full work queue after V8 (written by Claude, 25 Oct 2026)
+# CURSOR NEXT: everything not built yet (written by Claude; updated 29 Oct 2026)
 
 Read `AGENTS.md` first, every time. Paper only: nothing here may send an order, and `mode` / `live_orders` are never
 touched. One branch per ticket group, one PR each; Claude reviews every branch and does every server deploy. Never
 deploy, never push `main`. Tests never touch the network; recorded fixtures have tokens stripped.
 
-Do the groups in this order. Inside a group, tickets can go in any order.
+## Where things stand (29 Oct 2026)
 
-| # | Group | Branch | Why now |
+**Server runs:** `deploy/20261026` = e59c72c + four fixes (5f0939f cooldown, 5c7e3cd vol rank / 200-DMA cards,
+6af5950 NSE pre-open parser + key, be3bdc9 news fetch + dedupe). `STRATEGIES_ENABLED=["S6_swing","S6b_keltner"]`,
+paper. **Your `feat/v8-complete` has C0 but NOT those four fixes**, so deploying it as is would undo them (C11).
+
+**Claude's stopgaps on the server** (reference copies in `scripts/stopgap/`; each is replaced by a ticket below):
+| Stopgap (server path) | What it does | Started by | Replaced by |
 |---|---|---|---|
-| C0 | Merge the deployed login + portal into v8 | `feat/v8-complete` | v8 still has the stub login and deletes the portal hubs; it cannot be deployed until this is fixed |
-| C1 | Watchlist live quotes from Angel | `feat/c1-quotes` | Watchlist shows 100 symbols but stale Yahoo quotes for 20 |
-| C2 | Global cues source | `feat/c2-cues` | Yahoo returns 429 from the server; Market mood has no data |
-| C3 | Event calendar + date bug | `feat/c3-events` | `config/policy_dates.json` has 2025 RBI dates labelled 2026 |
-| C4 | Import Claude's Angel history into the lake | `feat/c4-history` | 2019+ daily and 2020+ 1-min bars are being downloaded now |
-| C5 | Lab diagnostics (signal "why" and movement) | `feat/c5-diagnostics` | Evidence page needs per-signal why / MFE / MAE / R at horizons |
-| V9 | Options on news + delta-hedged vol book | `feat/v9-options` | Owner's BTST/STBT trade and delta hedging; see `docs/PLAN_V9_OPTIONS.md` |
-| C6 | Live Angel WebSocket into `MultiBarFeed` | `feat/v8-live-1s` | V6-1 / V8-P2, still open in your V8 report |
-| C7 | News history (GDELT) for the event study | `feat/v8-event-study` | V8-P3 needs headlines back to 2020 |
+| `var/ws/ws_recorder.py` | Angel WebSocket (QUOTE mode) for 100 stocks + NIFTY 50 / BANK / VIX; 1-min bars to `var/ws/bars_1m_<date>.jsonl`; writes `var/quotes_cache.json` every 5 s (portal ticker, Watchlist, Nifty card) | cron 09:05 IST Mon-Fri | C6 + C1 |
+| `var/ws/live_signals.py` | Book A strategies every minute on those bars; first signal per strategy x symbol into `signals` (book A, decision `shadow`) | cron 09:16 IST Mon-Fri | C6 + C12 |
+| `backfill_nse_chart.py` / `backfill_today.py` | rebuild missing morning bars (NSE chart JSON, price only) / Angel 1-min candles | by hand | C6 + C10 |
+| `set_mpin.py` | save a key over SSH with a hidden prompt (`save_key`) | by hand | C9 |
+The two cron lines carry the comment "remove when ticket C6 lands". Removing them is part of C6's acceptance.
+
+**Known facts from running live (26-29 Oct):**
+- Angel's candle API refuses 1-minute history for this account ("Access denied because of exceeding access rate")
+  since 26 Oct, even at 1 request / 4 s; ONE_DAY for the 16:10 job works. WebSocket and quote API work. Parallel
+  sessions are allowed. A wrong MPIN 5 times locks the account (AB1007); 28 Oct reached attempt 4 (C9).
+- NSE file/JSON sources that work from the server: UDiFF bhavcopy zip, pre-open `key=FO` / `key=NIFTY%2050`
+  (`key=NIFTY` is dead), intraday `api/chart-databyindex-dynamic?index=<SYM>EQN&type=symbol` (timestamps are IST
+  written as UTC epoch: subtract 5 h 30 m). Moneycontrol + Economic Times RSS work.
+- No paper trade has opened yet: Book A is shadow by design (no intraday paper execution exists, C12); every Book B
+  pick (16 on 26-28 Oct) was blocked by F1 (Nifty vol rank 0.85 > 0.667) although all 16 pass sizing; the portal
+  shows "FILTER OFF" because the `market_filter` setting is not wired into the scan (C13).
+
+## Order (inside a group, tickets can go in any order)
+
+| # | Group | Branch | Why |
+|---|---|---|---|
+| C11 | Bring the four deployed fixes into your line | `feat/v8-complete` | otherwise the next deploy undoes them |
+| C13 | Wire `market_filter` into the scan; truthful badge | `feat/c13-filter` | portal says FILTER OFF while F1/F2 block everything |
+| C6 | Live Angel WebSocket inside the engine | `feat/v8-live-1s` | retire the recorder + signal stopgaps; Book A on live bars from 09:15 |
+| C12 | Book A paper execution (intraday) | `feat/c12-book-a-paper` | owner wants paper trades from the intraday signals |
+| C1 | Quotes from the engine's own feed | `feat/c1-quotes` | Watchlist / ticker today come from the stopgap file; Yahoo still overwrites it every 5 min |
+| C9 | Secure key entry (HTTPS / CLI) + stop repeated bad logins | `feat/c9-keys` | Keys page cannot save over plain HTTP (403 by design); MPIN reached 4/5 |
+| C10 | Market data store: 365 days in DB, older to JSON; files first | `feat/c10-store` | owner 26 Oct; candle API blocked |
+| C14 | Opening data: pre-open Nifty IEP, opening scorecard, GIFT Nifty | `feat/c14-opening` | Market mood opening cards are empty |
+| C15 | Signal outcomes for Book A shadow + Evidence | `feat/c15-outcomes` | Signals page OUTCOME column is empty for Book A |
+| C16 | Ops: health truth, Yahoo removal, Angel throttle, alerts | `feat/c16-ops` | Health shows "login false / WS off" while data flows |
+| C2 | Global cues source | `feat/c2-cues` | cues show stale; GIFT Nifty has no source (C14 uses it) |
+| C3 | Event calendar + RBI date bug | `feat/c3-events` | `policy_dates.json` has 2025 RBI dates labelled 2026 |
+| C5 | Lab diagnostics (signal why and movement) | `feat/c5-diagnostics` | Evidence page needs why / MFE / MAE / R at horizons |
+| C4 | Minute history import | `feat/c4-history` | recorder files since 26 Oct are the only clean 1-min history |
 | C8 | Strategy rework after the backtests | `feat/c8-rework` | no strategy passes; new pre-registered trials |
-| C10 | Market data store: 365 days in DB, older to JSON archive; file sources first | `feat/c10-store` | owner 26 Oct; Angel candle API rate-blocked the account |
-| C9 | Secure key entry (HTTPS / CLI) | `feat/c9-keys` | the Keys page cannot save over plain HTTP (403, by design); 26 Oct MPIN change needed SSH |
+| C7 | News history (GDELT) for the event study | `feat/v8-event-study` | V8-P3 needs headlines back to 2020 |
+| V9 | Options on news + delta-hedged vol book | `feat/v9-options` | `docs/PLAN_V9_OPTIONS.md` |
 
-## Status on Monday 26 Oct 2026 (Claude, read-only check of the server at 01:30 IST)
+## C11. Bring the deployed fixes into `feat/v8-complete` (first)
 
-Safe and running: `mode=paper`, `live_orders=false`, service up (49 MB), 100 instruments, real Angel login job at
-08:45, 26 Oct is a trading day, crypto-engine untouched. The 16:10 `job_daily_bars` backfills 320 sessions on its
-first run (the lake holds only 5 probe files today), so the 16:20 scan has history from Monday on.
+Merge (or cherry-pick) `origin/deploy/20261026` commits 5f0939f, 5c7e3cd, 6af5950, be3bdc9 into `feat/v8-complete`.
+Files: `web/test_angel.py`, `data/nse_http.py`, `web/portal_data.py`, `data/preopen.py`, `news/scrape.py`,
+`engine/runner.py` (job_news), tests `test_test_angel.py`, `test_nse_http_warm.py`, `test_portal_market_filters.py`,
+`test_preopen_nse_shape.py`, `test_news_fetch_dedupe.py`, fixture `tests/fixtures/nse_preopen_fo_20261026.json`.
+Acceptance: all those tests pass on your branch; `git diff origin/deploy/20261026 -- <those files>` shows only your
+additions; `pytest -q` / `ruff check .` green. Also open the PR for `fix/monotonic-cooldown` -> main (CI has failed on
+main since 24 Oct for that reason).
 
-What will NOT happen today, and the ticket that fixes it:
-| Gap | Effect today | Ticket |
-|---|---|---|
-| `strategies_enabled = []` | the scan logs shadow picks only; no paper trades open | owner decision (C8) |
-| Global cues use Yahoo (429 from the server) | Market mood empty | C2 |
-| Watchlist quotes use Yahoo | stale quotes for 20 names | C1 |
-| No live WebSocket feed | Book A shadow job only logs a line | C6 |
-| `policy_dates.json` has 2025 dates | RBI event flags wrong | C3 |
-| v8 branch has stub login and no hubs | v8 cannot be deployed | C0 |
+## C13. Wire the `market_filter` setting into the scan
+
+`engine.paper_jobs.job_scan` applies F1/F2 unconditionally, while `/api/portal/meta` reports
+`get_setting("market_filter", "off")` and the portal shows FILTER OFF.
+- `market_filter`: `"on"` (default; PREREG rule) | `"off"` (paper only: picks are taken, and each records
+  `would_skip_reason` = the F1/F2 reason so the two regimes can be compared later) | `"shadow"` (no trades).
+- Validation: `off` is refused when `mode == "live"`.
+- Badge shows the real state; Settings page can change it (runtime override, audited).
+- Tests: on/off/shadow decisions on a fixture lake; `would_skip_reason` stored; live + off refused.
 
 ### C8. Strategy rework after the backtests (`feat/c8-rework`, after C5)
 
@@ -101,22 +136,14 @@ bhav wins on conflicts as `Lake.write_daily` already prefers it).
 - Tests: archive move + verify + delete, reader across the 365-day boundary, idempotent re-run, a crash between
   write and delete loses nothing, memory under the 600 MB cap.
 
-## C0. Merge `feat/v-fix-2-login` (e59c72c, LIVE on the server) into `feat/v8-complete`
+## C0. Done (26 Oct, `5a70fe2` on `feat/v8-complete`): live login + portal hubs merged.
 
-The server runs e59c72c. `feat/v8-complete` was cut before it, so a merge is needed before v8 can ever be deployed.
-- Keep from e59c72c, unchanged: `engine/angel_session.py`; in `engine/runner.py` the real `job_refresh_instruments`
-  (08:30 + startup when the universe is empty), `_ensure_login`, `job_login` (08:45, retries 08:50/08:55), and
-  `job_daily_bars` logging in on demand; `config/ind_nifty100list.csv`; `web/portal/hubs/{command,book,evidence,
-  system}.js`; `web/portal/nav.js` with the Watchlist tab; `tests/test_angel_session.py`.
-- v8 currently DELETES the four hub files and stubs `job_login` / `job_refresh_instruments` (log line only). Both are
-  regressions; resolve every conflict in favour of e59c72c for those, and keep v8's additions (1 s rollup, news jobs,
-  event study, market filters) around them.
-- TOTP stays `pyotp.TOTP(secret).at(datetime.now(timezone.utc))`; never set `TZ` inside the process.
-- Acceptance: `pytest -q` and `ruff check .` green; `git diff e59c72c -- engine/angel_session.py web/portal/hubs`
-  shows only additions; portal pages Today / Market mood / Watchlist / Paper book / Signals / Evidence / Health /
-  Settings all load in `tests/test_portal_shell.py`; phase note in `docs/phase-reports/V8-COMPLETE.md`.
+## C1. Quotes from the engine's own feed (replace the stopgap file and Yahoo)
 
-## C1. Watchlist live quotes from Angel (replace Yahoo on this path)
+Today `var/quotes_cache.json` is written every 5 s by the stopgap recorder (shape: `{ts_ms, source, quotes: [{symbol,
+ltp, open, high, low, prev_close, volume, chg_pct, ts_ms, source}]}`; NIFTY / BANKNIFTY / INDIAVIX names) and Yahoo's
+`job_free_quotes` still overwrites it with 20 names every 5 min. After C6, quotes come from the engine's WebSocket
+ticks; the quote API below is the fallback when the socket is down.
 
 - `engine/quotes.py`: `fetch_quotes(api, tokens) -> list[Quote]` using SmartAPI `getMarketData("FULL",
   {"NSE": [...]})`, at most 50 tokens per call, at most 1 call per second (plan rule 8 throttle spirit).
@@ -153,19 +180,19 @@ Yahoo (429) and Stooq are blocked from the server; NSE's own APIs, NSE archives 
 - `data/events.py`: `events_on(day)`, `next_event(after_ms)`, used by Today, the BTST study and V9.
 - Tests: loader, overnight mapping, the 2026 dates above.
 
-## C4. Import Claude's Angel history into the lake
+## C4. Minute history import
 
-Claude is downloading (read-only, 25-26 Oct) into gzip JSON-lines files, copied to `var/angel_hist/` on the Mac:
-`hist_daily.jsonl.gz` (ONE_DAY 2019-01 -> 2026-10-23, Nifty 100 + NIFTY 50 / NIFTY BANK / INDIA VIX),
-`hist_idx1m.jsonl.gz` (ONE_MINUTE 2020-01 -> 2026-03 for the three indices), `hist_1m_fy<YYYY>.jsonl.gz` (Nifty 100
-ONE_MINUTE per financial year), `angel_fy.jsonl.gz` (FY 2026-27 to 23 Oct, daily + 1-min).
-Each line: `{"sym", "tf": "1d"|"1m", "from"?, "rows": [[iso_ts, o, h, l, c, v], ...]}` or `{"sym", "err": ...}`.
-- `scripts/import_angel_jsonl.py`: stream each file (never load a whole file), dedupe on (symbol, ts), write the
-  lake's existing parquet layout with `source="angel"`, UTC epoch ms. Report per symbol: first / last bar, missing
-  sessions vs the NSE holiday calendar, error lines.
-- Survivorship: the list is TODAY's Nifty 100. Join `config/universe_history.csv` so backtests before a stock joined
-  the index can exclude it; say so in every report.
-- Tests on a 3-line fixture file, including a truncated last line.
+The planned Angel history download was lost (Claude's scratchpad was wiped) and Angel now refuses 1-min candles for
+the account. What exists:
+- Daily: `var/lake/bars_1d/` on the server, NSE bhavcopy 24 Jun 2025 -> 23 Oct 2026 (`source="bhav"`) + the engine's
+  own 16:10 Angel ONE_DAY bars since 26 Oct.
+- 1-min: `var/ws/bars_1m_<YYYYMMDD>.jsonl` from the stopgap recorder since 26 Oct (26 Oct from 13:17; 27 Oct full;
+  28 Oct from 11:54 plus `_backfill` morning rebuilt from NSE prices, `src` = `angel_hist` / `nse_chart_price_only`;
+  29 Oct full from 09:05). One JSON object per bar: `{sym, ts (IST ISO), o, h, l, c, v, ticks, src}`.
+- `scripts/import_recorder_jsonl.py`: load those files into the C10 store (dedupe on symbol + minute; keep `src`;
+  mark `nse_chart_price_only` bars so backtests can exclude them).
+- Angel 1-min backfill only after the close, ≤ 1 request / 4 s, stop on the first refusal; never in market hours.
+- Survivorship: the universe is TODAY's Nifty 100; join `config/universe_history.csv` in every backtest report.
 
 ## C5. Lab diagnostics: why a signal fired and how price moved after it
 
@@ -181,11 +208,53 @@ with those columns and a per-strategy summary (pick vs mirror vs random). Result
 Everything is in `docs/PLAN_V9_OPTIONS.md` (tickets V9-1 to V9-6). Paper only. Claude adds the backtest numbers to
 §2 when the runs finish; build V9-1 / V9-2 / V9-6 first (pure code), V9-4 only after V9-3's gate result.
 
-## C6. Live Angel WebSocket into `MultiBarFeed` (your V8 report, "still open")
+## C6. Live Angel WebSocket inside the engine (retires both stopgaps)
 
-SmartWebSocketV2 mode 3 for the Nifty 100 + NIFTY 50, feeding `BarBuilder1s` and 1-min bars, Book A shadow on the
-live feed, reconnect with backoff, heartbeat on Health. RSS under 600 MB with 101 symbols for a full session (add a
-soak test that replays a recorded hour at 60x and asserts memory).
+Port `scripts/stopgap/ws_recorder.py` + `live_signals.py` into the engine (they are the working reference):
+- Runner task from 09:05 to 15:31 IST on trading days: one SmartWebSocketV2 connection on the engine's own session
+  (`_ensure_login`, never a second login), QUOTE mode, the universe + NIFTY 50 / NIFTY BANK / INDIA VIX.
+- Ticks -> 1-s and 1-min bars (`BarBuilder1s` / `MultiBarFeed`); minute volume = change in the day's cumulative
+  volume, first tick only sets the baseline; bars stored in the C10 store; quotes cache updated (C1).
+- `job_book_a_shadow` runs the Book A strategies on every closed bar (logic identical to `live_signals.py`: first
+  signal per strategy x symbol per day, skip a symbol until its bars start by 09:16, context from the previous
+  session); decisions `shadow` or `pending` per `book_a_mode` (C12).
+- Reconnect with backoff on drops (without re-login); if the session is lost, one re-login, then stop and alert.
+- Health: `ws_connected`, last tick age, ticks/min, bars written; Command badge uses it.
+- SIGTERM flushes the open minute (the stopgap learned that nohup jobs ignore SIGINT).
+- RSS under 600 MB for a full session; soak test replays a recorded hour (from `var/ws/bars_1m_20261029.jsonl`) at 60x.
+- Acceptance includes deleting the two NSE cron lines on the server (Claude does it at deploy).
+
+## C12. Book A paper execution (intraday, MIS)
+
+- `book_a_mode = "paper"`: each Book A pick becomes a paper MIS order filled at the NEXT minute's open + slippage
+  (marketable limit rounded to tick, plan rule 8); at most `max_open_intraday` (3) open; no entry after 14:35.
+- Exits every minute with `core.exits.step_exits` (stop, target, trail, time exit), square-off 14:55; costs from
+  `core.costs` MIS; sizing via `core.risk.size` (₹1 L minimum notional, 1% risk).
+- Same tables / wallet as Book B so the Paper wallet and Paper book show both books; a per-book P&L split.
+- The backtests say every Book A strategy loses after costs: the Paper book page must show that plainly (net R, costs).
+- Tests: fill at next open, stop hit inside a bar, square-off, max-open refusal, cost totals vs a hand-worked trade.
+
+## C14. Opening data
+
+- Pre-open Nifty: `key=NIFTY` is dead; compute index IEP / imbalance from the 50 constituents of `key=NIFTY%2050`
+  (free-float weights from the NSE index file, or equal-weight with a label) so the Market mood card fills.
+- Opening scorecard (gap, gap filled, 15-min OR, breadth, first-5-min volume vs 20-day, open type) from the 1-min
+  bars (C6 / recorder files); it is empty today.
+- GIFT Nifty: use the C2 source chain; show the % vs Nifty's previous close and its age.
+
+## C15. Outcomes for Book A shadow signals
+
+`job_outcomes` resolves Book B; Book A rows show "—". For every Book A signal compute, from 1-min bars: R at +15 /
++30 / +60 min, MFE / MAE, R held to 14:55, and the managed-exit net R (same as the backtest diagnostics, C5). Store
+in an outcomes table keyed by signal id; Signals page OUTCOME column and Evidence summaries read it.
+
+## C16. Ops
+
+- Health: report the recorder/WebSocket state truthfully (today it says login false / WS off while data flows).
+- Remove Yahoo from the server hot path (`job_free_quotes` overwrites the live cache with 20 names).
+- Angel client: one shared rate limiter (≤ 1 historical request / 4 s, quotes 1 / s), stop on the first
+  "exceeding access rate", back off for the rest of the day, show it on Health.
+- Telegram / portal alert when: login fails, WebSocket down > 2 min in market hours, daily bars fail, scan fails.
 
 ## C7. News history for the event study (V8-P3)
 
@@ -199,7 +268,7 @@ Link each headline to the first Indian session it could affect (V8 §2.3 rule), 
 ## Paste into Cursor (one chat per group)
 
 ```
-Read AGENTS.md, docs/CURSOR_NEXT.md and (for V9) docs/PLAN_V9_OPTIONS.md. Do group <C0|C1|...|V9> only, on the
+Read AGENTS.md, docs/CURSOR_NEXT.md and (for V9) docs/PLAN_V9_OPTIONS.md. Do group <C11|C13|C6|...|V9> only, on the
 branch named in the table. Every change gets a test that fails before and passes after; ruff check . and pytest -q
 green; no network in tests; no secrets anywhere; never change mode or live_orders; never deploy; never push main.
 End with a phase note in docs/phase-reports/<group>.md (what was built, tests, acceptance numbers, open questions).
