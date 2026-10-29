@@ -1,4 +1,5 @@
-# ruff: noqa  -- reference copy of a server stopgap (scripts/stopgap/README in docs/CURSOR_NEXT.md); not engine code
+# ruff: noqa
+# Reference copy of a server stopgap (see docs/CURSOR_NEXT.md); not engine code.
 """Fill today's 1-min bars from 09:15 up to the recorder's first minute, via Angel ONE_MINUTE candles.
 Same JSON shape as var/ws/bars_1m_<day>.jsonl (src "angel_hist"), written to var/ws/bars_1m_<day>_backfill.jsonl.
 ~1 request/s; stops at the FIRST refusal (26 Oct 2026: the candle API rate-blocked the account). One login.
