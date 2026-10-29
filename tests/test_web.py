@@ -14,6 +14,12 @@ from web.app import create_app
 async def client(monkeypatch, tmp_path):
     password = "test-pass"
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        f"DATA_DIR={tmp_path}\nMODE=paper\nLIVE_ORDERS=false\n"
+        "SESSION_SECRET=unit-test-session-secret\nCOOKIE_SECURE=false\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("PORTAL_ADMIN_HASH", hashed)
     monkeypatch.setenv("SESSION_SECRET", "unit-test-session-secret")
     monkeypatch.setenv("COOKIE_SECURE", "false")  # TestClient speaks plain HTTP

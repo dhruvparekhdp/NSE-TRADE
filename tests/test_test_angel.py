@@ -143,3 +143,23 @@ async def test_test_angel_rate_limit(tmp_path, monkeypatch):
         assert r2.status == 429
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_test_angel_first_call_soon_after_boot(tmp_path, monkeypatch):
+    """time.monotonic() counts from boot on Linux; a fresh CI runner or a just-rebooted server is < 120 s old.
+    The first Test Angel call must still be allowed (CI failed with 429 here, 24-26 Oct 2026)."""
+    reset_rate_limit_for_tests()
+    monkeypatch.setattr("web.test_angel.time.monotonic", lambda: 5.0)
+    password = _angel_env(monkeypatch, tmp_path)
+    app = create_app()
+    app["angel_api_factory"] = FakeSmartOK
+    app["angel_totp_factory"] = lambda: "123456"
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        assert (await client.post("/api/login", json={"password": password})).status == 200
+        assert (await client.post("/api/keys/test-angel", json={})).status == 200
+        assert (await client.post("/api/keys/test-angel", json={})).status == 429  # the 2-minute window still holds
+    finally:
+        await client.close()

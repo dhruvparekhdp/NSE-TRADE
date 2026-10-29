@@ -13,12 +13,14 @@ from web.auth import require_admin
 from web.secure_channel import require_secure_channel
 
 _RATE_WINDOW_S = 120.0
-_last_call_mono: float = 0.0
+# None = no call yet. Not 0.0: time.monotonic() counts from boot on Linux, so 0.0 would rate-limit the first call
+# for the first two minutes after a reboot (and on every fresh CI runner).
+_last_call_mono: float | None = None
 
 
 def reset_rate_limit_for_tests() -> None:
     global _last_call_mono
-    _last_call_mono = 0.0
+    _last_call_mono = None
 
 
 def _mask_client(code: str) -> str:
@@ -135,7 +137,7 @@ async def handle_test_angel(request: web.Request) -> web.Response:
     require_admin(request)
     require_secure_channel(request)
     now = time.monotonic()
-    if now - _last_call_mono < _RATE_WINDOW_S:
+    if _last_call_mono is not None and now - _last_call_mono < _RATE_WINDOW_S:
         raise web.HTTPTooManyRequests(text="wait 2 minutes between Angel tests")
     _last_call_mono = now
 

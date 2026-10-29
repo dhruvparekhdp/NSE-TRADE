@@ -131,15 +131,20 @@ class Settings(BaseSettings):
             return False
         return v
 
+    @staticmethod
+    def _secret_present(value: SecretStr | None) -> bool:
+        return bool(value and value.get_secret_value().strip())
+
     @property
     def angel_configured(self) -> bool:
         return all(
-            [
+            self._secret_present(x)
+            for x in (
                 self.angel_api_key,
                 self.angel_client_code,
                 self.angel_pin,
                 self.angel_totp_secret,
-            ]
+            )
         )
 
 

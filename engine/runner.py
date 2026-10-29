@@ -55,15 +55,45 @@ class EngineRunner:
                 return False
         return True
 
-    async def job_refresh_instruments(self) -> None:
-        if not self._trading_day_ok():
+    async def job_refresh_instruments(self, *, force: bool = False) -> None:
+        """08:30: Nifty 100 + Nifty 50 tokens and ticks from Angel's scrip master (F1e)."""
+        if not force and not self._trading_day_ok():
             return
-        log.info("job: refresh instruments (08:30 IST)")
+        from engine.angel_session import fetch_scrip_master_text, refresh_instruments
+
+        try:
+            text = await asyncio.to_thread(fetch_scrip_master_text)
+            stats = await asyncio.to_thread(refresh_instruments, self.db, text)
+            del text
+            log.info("job: instruments universe=%s missing=%s index=%s", stats["universe"], stats["missing"], stats["index_token"])  # noqa: E501
+        except Exception as exc:  # noqa: BLE001 — never kill the engine; the next run retries
+            log.warning("job: instruments failed: %s", exc)
+
+    async def _ensure_login(self) -> bool:
+        """One Angel session per IST day, reused by later jobs (F1f)."""
+        today = datetime.now(IST_Z).date()
+        if getattr(self, "_daily_candle_api", None) is not None and getattr(self, "_login_date", None) == today:
+            return True
+        from engine.angel_session import AngelCandleClient, angel_login, record_session
+
+        try:
+            api = await asyncio.to_thread(angel_login, get_settings())
+        except Exception as exc:  # noqa: BLE001
+            record_session(self.db, today, False, str(exc))
+            log.warning("job: Angel login failed: %s", exc)
+            return False
+        self._angel_api = api
+        self._daily_candle_api = AngelCandleClient(api)
+        self._login_date = today
+        record_session(self.db, today, True)
+        log.info("job: Angel login ok")
+        return True
 
     async def job_login(self) -> None:
+        """08:45 (retries 08:50, 08:55): log in for the day's data jobs."""
         if not self._trading_day_ok():
             return
-        log.info("job: login (08:45 IST)")
+        await self._ensure_login()
 
     async def job_morning_brief(self) -> None:
         if not self._trading_day_ok():
@@ -145,11 +175,10 @@ class EngineRunner:
     async def job_pending(self) -> None:
         if not self._trading_day_ok(allow_special_entries=False):
             return
-        today = datetime.now(IST_Z).date().isoformat()
-        n = self.db.execute(
-            "SELECT COUNT(*) AS n FROM pending_orders WHERE trade_date=? AND status='pending'",
-            (today,),
-        ).fetchone()["n"]
+        from engine.paper_jobs import job_pending
+
+        today = datetime.now(IST_Z).date()
+        n = await asyncio.to_thread(job_pending, self.db, trade_date=today)
         log.info("job: pending_orders ready n=%s", n)
 
     async def job_book_a_shadow(self) -> None:
@@ -174,33 +203,88 @@ class EngineRunner:
             return
         log.info("job: stop websocket")
 
+    async def job_daily_bars(self) -> None:
+        if not self._trading_day_ok():
+            return
+        from config.paths import lake_dir
+        from data.angel_daily import job_daily_bars, universe_symbol_tokens
+        from data.lake import Lake
+
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        tokens = universe_symbol_tokens(self.db)
+        if not tokens:
+            log.info("job: daily_bars skip (no instrument tokens)")
+            return
+        if not await self._ensure_login():  # the service may have restarted after 08:45
+            log.info("job: daily_bars skip (Angel login failed)")
+            return
+        api = self._daily_candle_api
+        try:
+            stats = await asyncio.to_thread(
+                job_daily_bars,
+                lake,
+                self.db,
+                symbols=tokens,
+                trade_date=today,
+                api=api,
+            )
+            log.info("job: daily_bars %s", stats)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("daily_bars failed: %s", exc)
+
     async def job_eod_fill(self) -> None:
         if not self._trading_day_ok():
             return
-        from engine.jobs import eod_fill_pending, load_pending_signals
+        from config.paths import lake_dir
+        from data.lake import Lake
+        from engine.paper_jobs import job_eod_fill
 
-        today = datetime.now(IST_Z).date().isoformat()
-        pending = load_pending_signals(self.db, today)
-        if not pending:
-            log.info("job: eod_fill nothing pending")
-            return
-        # Bars come from the lake / Angel ONE_DAY — empty dict → no_bar statuses recorded in logs
-        results = eod_fill_pending(pending, {})
-        log.info("job: eod_fill n=%s", len(results))
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        try:
+            results = await asyncio.to_thread(job_eod_fill, self.db, lake, trade_date=today)
+            log.info("job: eod_fill n=%s", len(results))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("eod_fill failed: %s", exc)
 
     async def job_scan(self) -> None:
         if not self._trading_day_ok(allow_special_entries=False):
             return
-        enabled = set(self.settings.strategies_enabled or [])
-        if not enabled:
-            log.info("job: scan skip (strategies_enabled empty — shadow-only)")
-            return
-        log.info("job: Book B scan enabled=%s", sorted(enabled))
+        from config.paths import lake_dir
+        from data.lake import Lake
+        from engine.paper_jobs import job_scan
+
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        enabled = list(self.settings.strategies_enabled or [])
+        try:
+            rows = await asyncio.to_thread(
+                job_scan,
+                self.db,
+                lake,
+                trade_date=today,
+                enabled=enabled,
+                write=True,
+            )
+            log.info("job: Book B scan signals=%s enabled=%s", len(rows), enabled or "shadow-all")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("scan failed: %s", exc)
 
     async def job_outcomes(self) -> None:
         if not self._trading_day_ok():
             return
-        log.info("job: outcomes resolve")
+        from config.paths import lake_dir
+        from data.lake import Lake
+        from engine.paper_jobs import job_outcomes
+
+        today = datetime.now(IST_Z).date()
+        lake = Lake(self.data_dir / "lake" if (self.data_dir / "lake").exists() else lake_dir())
+        try:
+            n = await asyncio.to_thread(job_outcomes, self.db, lake, trade_date=today)
+            log.info("job: outcomes resolved n=%s", n)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("outcomes failed: %s", exc)
 
     async def job_eod_report(self) -> None:
         if not self._trading_day_ok():
@@ -238,12 +322,21 @@ class EngineRunner:
         log.info("news job: start")
         try:
             from news.pipeline import refresh_and_score
-            from news.scrape import Headline
+            from news.scrape import fetch_all
+            from scripts.refresh_news_scores import process_headlines
 
-            headlines: list[Headline] = []
-            summary = refresh_and_score(headlines)
+            headlines = await asyncio.to_thread(fetch_all, None, None, log)
+            events_path = self.data_dir / "news" / "events.jsonl"
+            ev_stats = await asyncio.to_thread(
+                process_headlines,
+                headlines,
+                out_path=events_path,
+                use_llm=False,
+            )
+            summary = await asyncio.to_thread(refresh_and_score, headlines)
             log.info(
-                "news job: done india=%s macro=%s score=%.3f",
+                "news job: done events=%s india=%s macro=%s score=%.3f",
+                ev_stats.get("ingested"),
                 summary.get("n_india"),
                 summary.get("n_macro_shared"),
                 float(summary.get("score") or 0),
@@ -275,6 +368,8 @@ class EngineRunner:
         jobs: list[tuple[str, object, str]] = [
             ("30 8 * * mon-fri", self.job_refresh_instruments, "refresh_instruments"),
             ("45 8 * * mon-fri", self.job_login, "login"),
+            ("50 8 * * mon-fri", self.job_login, "login_retry_1"),
+            ("55 8 * * mon-fri", self.job_login, "login_retry_2"),
             ("45 8 * * mon-fri", self.job_morning_brief, "morning_brief"),
             ("0 9 * * mon-fri", self.job_start_feed, "start_feed"),
             ("0 9 * * mon-fri", self.job_pending, "pending"),
@@ -282,6 +377,7 @@ class EngineRunner:
             (self._hhmm_cron(sq_at), self.job_square_off, "square_off"),
             ("35 15 * * mon-fri", self.job_stop_feed, "stop_feed"),
             ("45 15 * * mon-fri", self.job_open_type, "open_type"),
+            ("10 16 * * mon-fri", self.job_daily_bars, "daily_bars"),
             ("15 16 * * mon-fri", self.job_eod_fill, "eod_fill"),
             ("20 16 * * mon-fri", self.job_scan, "scan"),
             ("30 16 * * mon-fri", self.job_outcomes, "outcomes"),
@@ -317,6 +413,9 @@ class EngineRunner:
         self._schedule()
         self.scheduler.start()
         self.scheduler.add_job(self.job_free_quotes, id="free_quotes_boot", replace_existing=True)
+        if not self.db.execute("SELECT 1 FROM instruments WHERE in_universe=1 AND token != '' LIMIT 1").fetchone():
+            # empty universe after a fresh deploy: load it now rather than waiting for 08:30
+            self.scheduler.add_job(self.job_refresh_instruments, kwargs={"force": True}, id="instruments_boot", replace_existing=True)  # noqa: E501
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self.settings.web_host, self.settings.web_port)

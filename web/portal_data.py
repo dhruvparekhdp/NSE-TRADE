@@ -258,6 +258,42 @@ def _upcoming_calendar_events(now_ms: int, days: int = 30) -> list[dict[str, str
     return events
 
 
+_NIFTY_FILTERS: dict[str, Any] = {}  # {"day": iso, "vol_rank": x, "above_200dma": y}; recomputed once per IST day
+
+
+def _nifty_filters(now_ms: int) -> tuple[float | None, bool | None]:
+    """Vol rank (1y) and above-200-DMA from the daily lake, with the SAME functions the 16:20 scan uses
+    (lab.market_filters), so the card and the scan's F1/F2 skips can never disagree. NIFTYBEES first, like
+    engine.paper_jobs.nifty_closes; only sessions before today (today's bar is not final until the close)."""
+    day = to_ist(now_ms).date()
+    if _NIFTY_FILTERS.get("day") == day.isoformat():
+        return _NIFTY_FILTERS["vol_rank"], _NIFTY_FILTERS["above_200dma"]
+    from core.indicators import sma
+    from data.lake import Lake
+    from lab.market_filters import vol_rank_252
+
+    rank = above = None
+    try:
+        root = Path(get_settings().data_dir) / "lake"
+        if root.exists():
+            cutoff = int(day.strftime("%Y%m%d"))
+            for sym in ("NIFTYBEES", "NIFTY"):
+                df = Lake(root).read_daily(sym)
+                if df.empty:
+                    continue
+                dates = df["date"].astype(str).str.replace("-", "").str[:8].astype(int)
+                closes = [float(c) for c in df.loc[dates < cutoff].sort_values("date")["close"]]
+                if closes:
+                    rank = vol_rank_252(closes)
+                    s200 = sma(closes, 200)[-1] if len(closes) >= 200 else None
+                    above = None if s200 is None else bool(closes[-1] >= s200)
+                    break
+    except Exception:  # noqa: BLE001 - a lake read problem must not break the Command page
+        rank = above = None
+    _NIFTY_FILTERS.update({"day": day.isoformat(), "vol_rank": rank, "above_200dma": above})
+    return rank, above
+
+
 def build_market(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms: int) -> dict[str, Any]:
     nifty = next((q for q in quotes["quotes"] if str(q["symbol"]).upper() in {"NIFTY", "NIFTY50", "^NSEI"}), None)
     flows = one(conn, "SELECT * FROM flows ORDER BY trade_date DESC LIMIT 1") or {}
@@ -268,12 +304,13 @@ def build_market(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms
         )
     }
     gift = cues.get("GIFTNIFTY") or {}
+    vol_rank, above_200 = _nifty_filters(now_ms)
     vix = cues.get("INDIAVIX") or {}
     return {
         "nifty": {"ltp": nifty["ltp"] if nifty else None, "chg_pct": nifty["chg_pct"] if nifty else None},
         "india_vix": _num(vix.get("last")),
-        "nifty_vol_rank": None,  # computed from the real Nifty daily lake from V3 on
-        "nifty_above_200dma": None,
+        "nifty_vol_rank": vol_rank,
+        "nifty_above_200dma": above_200,
         "fii_net_cr": _num(flows.get("fii_net_cr")),
         "dii_net_cr": _num(flows.get("dii_net_cr")),
         "gift_nifty_chg_pct": None if gift.get("stale") else _num(gift.get("chg_pct")),

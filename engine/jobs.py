@@ -165,10 +165,12 @@ def job_opening_scorecard(
 
 
 def persist_signals(conn: sqlite3.Connection, signals: list[Any], trade_date: str) -> None:
+    import json
+
     for sig in signals:
         conn.execute(
             "INSERT INTO signals(ts_ms, trade_date, symbol, book, strategy, side, role, price, stop, "
-            "target, decision, skip_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "target, features_json, decision, skip_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 sig.ts_ms,
                 trade_date,
@@ -180,6 +182,7 @@ def persist_signals(conn: sqlite3.Connection, signals: list[Any], trade_date: st
                 sig.entry_ref,
                 sig.stop,
                 sig.target,
+                json.dumps(sig.features or {}),
                 (sig.features or {}).get("decision", "taken" if sig.role == "pick" else sig.role),
                 (sig.features or {}).get("skip_reason"),
             ),

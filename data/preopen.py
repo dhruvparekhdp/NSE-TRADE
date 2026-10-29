@@ -11,7 +11,8 @@ from data.nse_http import JsonGetter, NseUnavailable
 
 log = logging.getLogger(__name__)
 
-PREOPEN_NIFTY_URL = "https://www.nseindia.com/api/market-data-pre-open?key=NIFTY"
+# key=NIFTY answers "No Data Found" since Oct 2026; "NIFTY 50" (URL-encoded) returns the 50 constituents
+PREOPEN_NIFTY_URL = "https://www.nseindia.com/api/market-data-pre-open?key=NIFTY%2050"
 PREOPEN_FO_URL = "https://www.nseindia.com/api/market-data-pre-open?key=FO"
 
 
@@ -48,6 +49,10 @@ def parse_preopen_payload(
     rows_in = raw.get("data") or raw.get("rows") or []
     out: list[PreopenSnap] = []
     for r in rows_in:
+        # real NSE shape: {"metadata": {...}, "detail": {"preOpenMarket": {...}}}
+        if isinstance(r.get("metadata"), dict):
+            pom = (r.get("detail") or {}).get("preOpenMarket") or {}
+            r = {**pom, **r["metadata"]}
         sym = str(r.get("symbol") or r.get("symbolName") or "").upper()
         if not sym:
             continue
