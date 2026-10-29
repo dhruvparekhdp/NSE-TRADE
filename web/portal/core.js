@@ -236,9 +236,10 @@
   F.openPositions = function (D) { return (D.swing && D.swing.open) || []; };
   F.filter = function (D) {
     var m = D.meta || {}, mk = D.market || {}, rules = (D.swing && D.swing.rules) || {};
-    var rank = mk.nifty_vol_rank, max = rules.vol_rank_max != null ? rules.vol_rank_max : null, mode = m.market_filter || rules.market_filter || "";
-    return { rank: rank, max: max, mode: mode, on: mode && mode !== "off",
-             closed: mode === "nifty_vol" && U.num(rank) && U.num(max) && rank >= max, known: U.num(rank) };
+    var rank = mk.nifty_vol_rank, max = rules.vol_rank_max != null ? rules.vol_rank_max : null;
+    var mode = m.market_filter || rules.market_filter || "on";
+    return { rank: rank, max: max, mode: mode, off: mode === "off", shadow: mode === "shadow", on: mode === "on",
+             closed: mode === "on" && U.num(rank) && U.num(max) && rank >= max, known: U.num(rank) };
   };
   // Worst case = what every stop filling now would cost; a trailed stop above entry adds nothing.
   F.worstCaseInr = function (open) {
@@ -381,7 +382,8 @@
   function drawStrip() {
     var D = snapshot(), g = F.filter(D), open = F.openPositions(D), m = D.meta || {};
     var gate = U.$("#stripGate");
-    gate.textContent = !D.meta ? "FILTER …" : !g.on ? "FILTER OFF" : !g.known ? "FILTER · NO READING YET" : g.closed ? "FILTER CLOSED" : "FILTER OPEN";
+    gate.textContent = !D.meta ? "FILTER …" : g.shadow ? "FILTER SHADOW" : g.off ? "FILTER OFF"
+      : !g.known ? "FILTER · NO READING YET" : g.closed ? "FILTER CLOSED" : "FILTER OPEN";
     gate.classList.toggle("closed", g.closed);
     U.$("#stripOpen").textContent = "OPEN POSITIONS " + (D.swing ? open.length : "…");
     var cap = m.capital_inr, worst = F.worstCaseInr(open);

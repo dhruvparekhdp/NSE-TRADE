@@ -209,7 +209,7 @@ def build_meta(now_ms: int) -> dict[str, Any]:
         "live_orders": bool(get_setting("live_orders", settings.live_orders)),
         "kill_switch": bool(get_setting("kill_switch", settings.kill_switch)),
         "book_a_mode": get_setting("book_a_mode", "shadow"),
-        "market_filter": get_setting("market_filter", "off"),
+        "market_filter": get_setting("market_filter", "on"),
         "session": session_block(now_ms),
         "calendar_ok": cal_ok,
         "calendar_year_loaded": cal_year,
@@ -435,7 +435,7 @@ def build_swing(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms:
             "risk_pct": float(get_setting("risk_per_trade_pct", settings.risk_per_trade_pct)),
             "min_position_inr": float(min_pos),
             "max_open": int(get_setting("max_open_swing", settings.max_open_swing)),
-            "market_filter": get_setting("market_filter", "off"),
+            "market_filter": get_setting("market_filter", "on"),
             "vol_rank_max": float(get_setting("market_filter_vol_rank_max", 0.667)),
             "excluded": list(get_setting("universe_excluded", []) or []),
         },
@@ -1134,13 +1134,13 @@ def job_rows(conn: sqlite3.Connection | None, scheduler: Any) -> list[dict[str, 
     return out
 
 
-# Runtime settings the Settings page may change. Never mode / live_orders (AGENTS rule 4) and never the
-# market filter (it goes on only after the lab gate, PLAN_V2 D5). Each: (kind, low, high or choices).
+# Runtime settings the Settings page may change. Never mode / live_orders (AGENTS rule 4).
 SETTINGS_WHITELIST: dict[str, tuple[str, Any, Any]] = {
     "kill_switch": ("bool", None, None),
     "max_open_swing": ("int", 1, 10),
     "risk_per_trade_pct": ("float", 0.1, 1.0),
     "book_a_mode": ("choice", ("off", "shadow"), None),
+    "market_filter": ("choice", ("on", "off", "shadow"), None),
 }
 
 
@@ -1149,6 +1149,8 @@ def validate_setting(key: str, value: Any) -> Any:
     if key not in SETTINGS_WHITELIST:
         raise ValueError("this setting cannot be changed from the portal")
     kind, lo, hi = SETTINGS_WHITELIST[key]
+    if key == "market_filter" and str(value).lower() == "off" and get_settings().mode == "live":
+        raise ValueError("market filter off is not allowed in live mode")
     if kind == "bool":
         if not isinstance(value, bool):
             raise ValueError("must be true or false")
