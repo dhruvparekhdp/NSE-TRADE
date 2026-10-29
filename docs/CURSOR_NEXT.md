@@ -36,7 +36,7 @@ The two cron lines carry the comment "remove when ticket C6 lands". Removing the
 |---|---|---|---|
 | C11 | Bring the four deployed fixes into your line | `feat/v8-complete` | otherwise the next deploy undoes them |
 | C17 | Paper book correctness (limits, one position per stock, cash, job order) | `feat/c17-paper-book` | replay 30 Oct: 6 positions with limit 4, DRREDDY bought twice, wallet never debited |
-| C13 | Wire `market_filter` into the scan; truthful badge | `feat/c13-filter` | portal says FILTER OFF while F1/F2 block everything |
+| C13 | Wire `market_filter` into the scan; truthful badge | `feat/c17-paper-book` (same branch as C17: both change `job_scan`) | portal says FILTER OFF while F1/F2 block everything |
 | C6 | Live Angel WebSocket inside the engine | `feat/v8-live-1s` | retire the recorder + signal stopgaps; Book A on live bars from 09:15 |
 | C12 | Book A paper execution (intraday) | `feat/c12-book-a-paper` | owner wants paper trades from the intraday signals |
 | C1 | Quotes from the engine's own feed | `feat/c1-quotes` | Watchlist / ticker today come from the stopgap file; Yahoo still overwrites it every 5 min |
@@ -63,7 +63,7 @@ Acceptance: all those tests pass on your branch; `git diff origin/deploy/2026102
 additions; `pytest -q` / `ruff check .` green. Also open the PR for `fix/monotonic-cooldown` -> main (CI has failed on
 main since 24 Oct for that reason).
 
-## C17. Paper book correctness (do with C13; both are needed before the first paper trade)
+## C17. Paper book correctness (do with C13 on one branch, `feat/c17-paper-book` cut from `feat/v8-complete` after C11; both are needed before the first paper trade)
 
 Found 30 Oct 2026 by replaying the engine's own `job_eod_fill` + `job_scan` for 26-29 Oct on a copy of the server's
 `engine.db` and daily lake (`scripts/stopgap/replay_paper.py`). With the filter ON it reproduces production exactly
