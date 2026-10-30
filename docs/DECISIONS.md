@@ -142,3 +142,21 @@ Bank Nifty (monthly only since Nov 2024) ATM options around scheduled events, un
 futures, plus sell vs buy hedged-straddle paper books. No order code path in any V9 module; no change to `mode` /
 `live_orders`. Work queue for Cursor: `docs/CURSOR_NEXT.md`.
 Also found: `config/policy_dates.json` holds the 2025 RBI MPC dates labelled 2026 (ticket C3).
+
+## 2026-10-30 — Paper Book B with the market filter off; first paper week
+
+Owner (30 Oct, in chat): "no paper trade in this first week, atleast generate some trade, then we can decide all
+things of filter". Decisions taken by Claude under that instruction:
+- Deployed `feat/c17-paper-book` (340d64b: C11 + C13 + C17) during market hours at 13:10 IST (owner: "do all changes
+  now before closing of market"). Backups `~/nse-engine.bak-20261030`, `~/nse-engine-db-20261030.sqlite`,
+  `~/crontab.bak-20261030`.
+- `market_filter = "off"` saved in engine.db `settings` (paper only; live + off is refused by validate_setting). Every
+  pick taken this way stores `would_skip_reason` (today: `market_filter_f1_vol`, Nifty vol rank 0.85), so the take/skip
+  comparison stays possible. This is NOT the PREREG rule; results from these trades are paper evidence only and are
+  not lab results (AGENTS rule 6).
+- The 29 Oct scan was re-run once with the filter off to queue orders for 30 Oct (BHARTIARTL 11, ADANIPORTS 11, DLF 29,
+  KOTAKBANK 44); signals were not re-stored. Event `paper_backfill_queue` in engine.db.
+- Bug found and fixed on the way (`fix/runtime-overrides`, 0034a49, deployed 13:17 IST): `apply_db_secrets()` at engine
+  start called `reset_settings_cache()`, which wiped every SQLite runtime setting (market_filter, kill_switch,
+  max_open_swing). Cursor: merge it into `feat/c17-paper-book`.
+Revisit the filter after the first paper weeks (owner).

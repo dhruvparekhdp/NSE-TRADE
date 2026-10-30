@@ -87,6 +87,11 @@ Bugs (each needs a failing test first):
 Acceptance: the replay with the filter off ends with ≤ 4 holdings, no duplicate symbol, cash + holdings = ₹1 L +/-
 costs, and every skip has a reason; with the filter on it is unchanged.
 
+## C18. Merge `fix/runtime-overrides` (0034a49) into `feat/c17-paper-book` (first)
+
+Deployed 30 Oct 2026. `apply_db_secrets()` wiped the SQLite runtime settings on every engine start (kill_switch
+included). Test `tests/test_secrets_loader_overrides.py`. Also see DECISIONS 2026-10-30 (paper with the filter off).
+
 ## C13. Wire the `market_filter` setting into the scan
 
 `engine.paper_jobs.job_scan` applies F1/F2 unconditionally, while `/api/portal/meta` reports
