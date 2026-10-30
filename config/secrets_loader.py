@@ -8,7 +8,7 @@ from pydantic import SecretStr
 
 from config.key_fields import BY_KEY, KEY_FIELDS
 from config.secret_box import is_sealed, open_, seal
-from config.settings import get_settings, reset_settings_cache
+from config.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +22,9 @@ def apply_db_secrets() -> list[str]:
         return []
     init_postgres()
     stored = get_app_settings()
-    reset_settings_cache()
+    # Rebuild Settings only. reset_settings_cache() would also drop the SQLite runtime overrides that init_db
+    # loaded before this runs (market_filter, kill_switch, max_open_swing: PLAN A6).
+    get_settings.cache_clear()
     settings = get_settings()
     applied: list[str] = []
     for field in KEY_FIELDS:
