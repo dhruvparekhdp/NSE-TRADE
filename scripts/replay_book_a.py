@@ -8,17 +8,40 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from config.settings import set_runtime_override  # noqa: E402
-from engine.book_a_paper import JsonlMinuteBarSource, job_book_a_minute  # noqa: E402
+from engine.book_a_paper import JsonlMinuteBarSource, job_book_a_minute, run_book_a_until  # noqa: E402
 from engine.state import init_db  # noqa: E402
 
+IST = ZoneInfo("Asia/Kolkata")
 FIX = ROOT / "var" / "bt" / "replay_20261030"
 BARS = FIX / "bars_1m_20261030.jsonl"
 SIGS = FIX / "signals_bookA_20261030.json"
+
+
+class FlushedView:
+    """Live view of the recorder file at wall time `now_ms`: a minute's bar exists only ~5 s after it ends."""
+
+    def __init__(self, src: JsonlMinuteBarSource) -> None:
+        self.src, self.now_ms = src, 0
+
+    def _ok(self, bar):
+        return bar if bar is not None and bar.ts_ms // 60_000 * 60_000 + 65_000 <= self.now_ms else None
+
+    def bar_at_minute(self, symbol, minute_ms):
+        return self._ok(self.src.bar_at_minute(symbol, minute_ms))
+
+    def next_bar_after(self, symbol, after_ms):
+        return self._ok(self.src.next_bar_after(symbol, after_ms))
+
+
+def summary(conn) -> tuple:
+    rows = conn.execute("SELECT symbol, entry_ms, exit_reason, round(net_inr, 2) FROM trades WHERE book='A' ORDER BY id").fetchall()
+    return tuple(tuple(r) for r in rows)
 
 
 def main() -> None:
@@ -82,6 +105,26 @@ def main() -> None:
     print("net_r", sum(float(r["r_mult"] or 0) for r in closed))
     print("final_wallet", wallet["wallet"] if wallet else None, "open", open_n)
     print("idempotent_ok", totals["entries"] == conn.execute("SELECT COUNT(*) FROM book_a_signal_state WHERE status='filled'").fetchone()[0])
+    batch = summary(conn)
+
+    # Live path: the runner's cron tick at second 0 of every minute 09:16-15:00 through run_book_a_until.
+    conn.execute("DELETE FROM trades")
+    conn.execute("DELETE FROM book_a_signal_state")
+    conn.execute("DELETE FROM book_a_cursor")
+    conn.execute("DELETE FROM paper_cycles WHERE book='A'")
+    conn.commit()
+    view = FlushedView(src)
+    start = int(datetime.fromtimestamp(min(minutes) / 1000, IST).replace(hour=9, minute=16, second=0).timestamp() * 1000)
+    tick, end = start, start + (15 * 60 - (9 * 60 + 16)) * 60_000
+    while tick <= end:
+        view.now_ms = tick
+        run_book_a_until(conn, view, now_ms=tick)
+        tick += 60_000
+    live = summary(conn)
+    print("live_path_trades", len(live), "same_as_batch", live == batch)
+    if live != batch:
+        print("batch", batch)
+        print("live ", live)
 
 
 if __name__ == "__main__":

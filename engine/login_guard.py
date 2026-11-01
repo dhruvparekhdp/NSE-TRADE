@@ -30,7 +30,8 @@ def secrets_key_version_ms() -> int:
                 "SELECT EXTRACT(EPOCH FROM MAX(updated_at)) * 1000 AS v FROM app_settings "
                 "WHERE key IN ('angel_pin', 'angel_totp_secret', 'angel_api_key', 'angel_client_code')"
             ).fetchone()
-            return int(row["v"] or 0) if row and row["v"] is not None else 0
+            # storage.pg.connect returns plain tuples (no dict row factory)
+            return int(row[0]) if row and row[0] is not None else 0
     except Exception:  # noqa: BLE001
         return 0
 
@@ -40,9 +41,20 @@ def _today_row(conn: sqlite3.Connection, version_ms: int) -> sqlite3.Row:
     day = datetime.now(tz=IST).date().isoformat()
     row = conn.execute("SELECT * FROM login_guard WHERE day=?", (day,)).fetchone()
     if row is None:
+        # Angel counts wrong MPINs across days (5 in a row lock the account), so the streak carries over
+        # from the last day while the key is unchanged.
+        prev = conn.execute(
+            "SELECT key_version_ms, ab1007_streak, blocked FROM login_guard WHERE day<? ORDER BY day DESC LIMIT 1",
+            (day,),
+        ).fetchone()
+        streak, blocked = (
+            (int(prev["ab1007_streak"]), int(prev["blocked"]))
+            if prev is not None and int(prev["key_version_ms"]) == version_ms
+            else (0, 0)
+        )
         conn.execute(
-            "INSERT INTO login_guard(day, key_version_ms, ab1007_streak, blocked) VALUES (?,?,0,0)",
-            (day, version_ms),
+            "INSERT INTO login_guard(day, key_version_ms, ab1007_streak, blocked) VALUES (?,?,?,?)",
+            (day, version_ms, streak, blocked),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM login_guard WHERE day=?", (day,)).fetchone()

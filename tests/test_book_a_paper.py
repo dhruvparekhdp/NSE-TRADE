@@ -8,7 +8,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from config.settings import set_runtime_override
-from engine.book_a_paper import JsonlMinuteBarSource, job_book_a_minute
+from engine.book_a_paper import JsonlMinuteBarSource, job_book_a_minute, run_book_a_until
 from engine.state import init_db
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -110,7 +110,7 @@ def test_square_off_at_close(tmp_path):
     bars = tmp_path / "bars.jsonl"
     _write_bars(bars, "SBIN", [(9, 16, 1000.0), (9, 17, 1000.0), (14, 55, 1005.0)])
     conn = init_db(tmp_path / "e.db")
-    _insert_sig(conn, "SBIN", 9, 16)
+    _insert_sig(conn, "SBIN", 9, 16, stop=995.0)
     conn.commit()
     set_runtime_override("book_a_mode", "paper")
     src = JsonlMinuteBarSource(bars)
@@ -174,3 +174,86 @@ def test_margin_cash_refusal(tmp_path, monkeypatch):
     job_book_a_minute(conn, src, now_ms=_ms(9, 17))
     st = conn.execute("SELECT skip_reason FROM book_a_signal_state ORDER BY signal_id DESC LIMIT 1").fetchone()
     assert st["skip_reason"] == "cash"
+
+
+def _append(path, row: dict) -> None:
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+
+
+def _bar(sym: str, h: int, m: int, o: float, hi: float, lo: float, c: float) -> dict:
+    return {"sym": sym, "ts": f"2026-10-30T{h:02d}:{m:02d}:00+05:30", "o": o, "h": hi, "l": lo, "c": c, "v": 1}
+
+
+def test_live_driver_waits_for_finished_minutes_and_catches_up(tmp_path):
+    """Live: a minute's bar lands only after the minute ends; the driver must still enter and stop out."""
+    bars = tmp_path / "bars.jsonl"
+    _append(bars, _bar("SBIN", 9, 16, 1000, 1001, 999.5, 1000))
+    conn = init_db(tmp_path / "e.db")
+    _insert_sig(conn, "SBIN", 9, 16, stop=995.0)
+    conn.commit()
+    set_runtime_override("book_a_mode", "paper")
+    # 09:17:00 cron tick: the 09:17 bar does not exist yet -> nothing, and no signal is burnt as no_bar
+    run_book_a_until(conn, JsonlMinuteBarSource(bars), now_ms=_ms(9, 17))
+    assert conn.execute("SELECT COUNT(*) FROM book_a_signal_state").fetchone()[0] == 0
+    _append(bars, _bar("SBIN", 9, 17, 1000, 1002, 999, 1001))
+    _append(bars, _bar("SBIN", 9, 18, 1001, 1001, 990, 992))
+    # 09:20:00 tick (one tick missed): processes 09:17 entry and 09:18 stop
+    out = run_book_a_until(conn, JsonlMinuteBarSource(bars), now_ms=_ms(9, 20))
+    assert out["entries"] == 1 and out["exits"] == 1
+    row = conn.execute("SELECT entry_ms, exit_reason FROM trades WHERE book='A'").fetchone()
+    assert row["entry_ms"] == _ms(9, 17) and row["exit_reason"] == "stop"
+    again = run_book_a_until(conn, JsonlMinuteBarSource(bars), now_ms=_ms(9, 20))
+    assert again["minutes"] == 0
+
+
+def test_stop_inside_entry_minute(tmp_path):
+    bars = tmp_path / "bars.jsonl"
+    _append(bars, _bar("SBIN", 9, 16, 1000, 1001, 999, 1000))
+    _append(bars, _bar("SBIN", 9, 17, 1000, 1001, 980, 985))
+    conn = init_db(tmp_path / "e.db")
+    _insert_sig(conn, "SBIN", 9, 16, stop=995.0)
+    conn.commit()
+    set_runtime_override("book_a_mode", "paper")
+    job_book_a_minute(conn, JsonlMinuteBarSource(bars), now_ms=_ms(9, 17))
+    row = conn.execute("SELECT status, exit_reason FROM trades WHERE book='A'").fetchone()
+    assert row["status"] == "closed" and row["exit_reason"] == "stop"
+
+
+def test_net_is_gross_minus_charges_only(tmp_path):
+    """Fill prices already carry slippage; closing must not take slippage off a second time."""
+    from core.costs import rates_for, round_trip
+
+    bars = tmp_path / "bars.jsonl"
+    _append(bars, _bar("SBIN", 9, 16, 1000, 1001, 999, 1000))
+    _append(bars, _bar("SBIN", 9, 17, 1000, 1001, 999, 1000))
+    _append(bars, _bar("SBIN", 9, 18, 1000, 1030, 999, 1025))
+    conn = init_db(tmp_path / "e.db")
+    _insert_sig(conn, "SBIN", 9, 16, stop=995.0)
+    conn.commit()
+    set_runtime_override("book_a_mode", "paper")
+    src = JsonlMinuteBarSource(bars)
+    job_book_a_minute(conn, src, now_ms=_ms(9, 17))
+    job_book_a_minute(conn, src, now_ms=_ms(9, 18))
+    t = conn.execute("SELECT * FROM trades WHERE book='A'").fetchone()
+    assert t["exit_reason"] == "target"
+    q, e, x = t["qty"], t["entry_price"], t["exit_price"]
+    charges = round_trip(e * q, x * q, "MIS", rates_for("MIS")).total
+    assert abs(t["net_inr"] - ((x - e) * q - charges)) < 1e-6
+
+
+def test_old_days_signals_ignored(tmp_path):
+    bars = tmp_path / "bars.jsonl"
+    _append(bars, _bar("SBIN", 9, 16, 1000, 1001, 999, 1000))
+    _append(bars, _bar("SBIN", 9, 17, 1000, 1001, 999, 1000))
+    conn = init_db(tmp_path / "e.db")
+    conn.execute(
+        "INSERT INTO signals(ts_ms, trade_date, symbol, book, strategy, side, role, price, stop, target, decision) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (_ms(9, 16) - 86_400_000, "2026-10-29", "SBIN", "A", "S1_orb", 1, "pick", 1000.0, 995.0, 1020.0, "shadow"),
+    )
+    conn.commit()
+    set_runtime_override("book_a_mode", "paper")
+    # 09:20: an old signal would otherwise be matched to today's first bar and logged no_bar
+    job_book_a_minute(conn, JsonlMinuteBarSource(bars), now_ms=_ms(9, 20))
+    assert conn.execute("SELECT COUNT(*) FROM book_a_signal_state").fetchone()[0] == 0

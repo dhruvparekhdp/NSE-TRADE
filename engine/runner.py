@@ -199,14 +199,14 @@ class EngineRunner:
         ist = datetime.now(IST_Z)
         if ist.hour < 9 or (ist.hour == 9 and ist.minute < 16) or ist.hour > 15 or (ist.hour == 15 and ist.minute > 0):
             return
-        from engine.book_a_paper import JsonlMinuteBarSource, job_book_a_minute
+        from engine.book_a_paper import JsonlMinuteBarSource, run_book_a_until
 
         today = ist.date()
         path = self.data_dir / "ws" / f"bars_1m_{today.strftime('%Y%m%d')}.jsonl"
         source = JsonlMinuteBarSource(path)
         now_ms = int(ist.timestamp() * 1000)
         try:
-            stats = await asyncio.to_thread(job_book_a_minute, self.db, source, now_ms=now_ms)
+            stats = await asyncio.to_thread(run_book_a_until, self.db, source, now_ms=now_ms)
             log.info("job: book_a_paper %s", stats)
         except Exception as exc:  # noqa: BLE001
             log.warning("book_a_paper failed: %s", exc)

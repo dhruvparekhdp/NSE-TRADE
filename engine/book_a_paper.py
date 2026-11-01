@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from bisect import bisect_right
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ class JsonlMinuteBarSource:
 
     path: Path
     _index: dict[tuple[str, int], Bar] | None = None
+    _by_sym: dict[str, list[int]] | None = None
 
     def _load(self) -> None:
         if self._index is not None:
@@ -73,6 +75,12 @@ class JsonlMinuteBarSource:
                 if key not in idx or bar.ts_ms >= idx[key].ts_ms:
                     idx[key] = bar
         self._index = idx
+        by_sym: dict[str, list[int]] = {}
+        for sym, minute_ms in idx:
+            by_sym.setdefault(sym, []).append(minute_ms)
+        for minutes in by_sym.values():
+            minutes.sort()
+        self._by_sym = by_sym
 
     def bar_at_minute(self, symbol: str, minute_ms: int) -> Bar | None:
         self._load()
@@ -81,10 +89,11 @@ class JsonlMinuteBarSource:
 
     def next_bar_after(self, symbol: str, after_ms: int) -> Bar | None:
         self._load()
-        assert self._index is not None
+        assert self._index is not None and self._by_sym is not None
         sym = symbol.upper()
-        keys = sorted(k for k in self._index if k[0] == sym and k[1] > after_ms)
-        return self._index[keys[0]] if keys else None
+        minutes = self._by_sym.get(sym, [])
+        i = bisect_right(minutes, after_ms)
+        return self._index[(sym, minutes[i])] if i < len(minutes) else None
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -92,6 +101,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         "CREATE TABLE IF NOT EXISTS book_a_signal_state ("
         "signal_id INTEGER PRIMARY KEY, status TEXT NOT NULL, "
         "skip_reason TEXT, trade_id INTEGER, updated_ms INTEGER NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS book_a_cursor (trade_date TEXT PRIMARY KEY, last_minute_ms INTEGER NOT NULL)"
     )
     try:
         conn.execute("ALTER TABLE paper_cycles ADD COLUMN book TEXT NOT NULL DEFAULT 'B'")
@@ -171,15 +183,15 @@ def _close_trade(conn: sqlite3.Connection, tr: sqlite3.Row, px: float, ts_ms: in
     gross = (px - entry) * qty * side
     buy_v = entry * qty if side > 0 else px * qty
     sell_v = px * qty if side > 0 else entry * qty
+    # Entry and exit prices already include slippage (core.exits), so only charges come off here.
     costs = round_trip(buy_v, sell_v, "MIS", rates_for("MIS")).total
-    slip = (buy_v + sell_v) * 0.03 / 100.0
-    net = gross - costs - slip
+    net = gross - costs
     risk = abs(entry - float(tr["stop_init"])) * qty
     r_mult = net / risk if risk else 0.0
     conn.execute(
         "UPDATE trades SET exit_ms=?, exit_price=?, exit_reason=?, gross_inr=?, costs_inr=?, "
         "net_inr=?, r_mult=?, status='closed' WHERE id=?",
-        (ts_ms, px, reason, gross, costs + slip, net, r_mult, tr["id"]),
+        (ts_ms, px, reason, gross, costs, net, r_mult, tr["id"]),
     )
     conn.execute(
         "UPDATE paper_cycles SET wallet = wallet + ?, peak_wallet = MAX(peak_wallet, wallet + ?) "
@@ -189,6 +201,22 @@ def _close_trade(conn: sqlite3.Connection, tr: sqlite3.Row, px: float, ts_ms: in
     return net
 
 
+def _position(tr: sqlite3.Row) -> Position:
+    return Position(
+        symbol=tr["symbol"],
+        strategy=tr["strategy"],
+        book="A",
+        side=int(tr["side"]),
+        qty=int(tr["qty"]),
+        entry_ms=int(tr["entry_ms"]),
+        entry_price=float(tr["entry_price"]),
+        stop_init=float(tr["stop_init"]),
+        stop=float(tr["stop_now"] or tr["stop_init"]),
+        risk_inr=abs(float(tr["entry_price"]) - float(tr["stop_init"])) * int(tr["qty"]),
+        target=float(tr["target"]) if tr["target"] is not None else None,
+    )
+
+
 def job_book_a_minute(
     conn: sqlite3.Connection,
     source: MinuteBarSource,
@@ -196,7 +224,11 @@ def job_book_a_minute(
     now_ms: int,
     tick_map: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    """One minute of Book A paper: exits then new entries (idempotent per signal_id)."""
+    """One minute of Book A paper: exits then new entries (idempotent per signal_id).
+
+    `now_ms` falls inside the minute being processed, and that minute's bar must already be complete;
+    live callers go through run_book_a_until, which only hands over finished minutes.
+    """
     mode = str(get_setting("book_a_mode", get_settings().book_a_mode)).lower()
     if mode != "paper":
         return {"mode": mode, "skipped": True}
@@ -227,20 +259,7 @@ def job_book_a_minute(
         bar = source.bar_at_minute(tr["symbol"], minute_ms)
         if bar is None:
             continue
-        pos = Position(
-            symbol=tr["symbol"],
-            strategy=tr["strategy"],
-            book="A",
-            side=int(tr["side"]),
-            qty=int(tr["qty"]),
-            entry_ms=int(tr["entry_ms"]),
-            entry_price=float(tr["entry_price"]),
-            stop_init=float(tr["stop_init"]),
-            stop=float(tr["stop_now"] or tr["stop_init"]),
-            risk_inr=abs(float(tr["entry_price"]) - float(tr["stop_init"])) * int(tr["qty"]),
-            target=float(tr["target"]) if tr["target"] is not None else None,
-        )
-        sq_rules = rules
+        pos = _position(tr)
         sq_rules = replace(rules, square_off_ms=minute_ms) if hm >= sq_hm else rules
         pos, ev = step_exits(pos, bar, sq_rules, atr=None)
         if ev:
@@ -258,8 +277,8 @@ def job_book_a_minute(
         return stats
 
     rows = conn.execute(
-        "SELECT * FROM signals WHERE book='A' AND role='pick' AND ts_ms <= ? ORDER BY ts_ms, id",
-        (now_ms,),
+        "SELECT * FROM signals WHERE book='A' AND role='pick' AND trade_date=? AND ts_ms <= ? ORDER BY ts_ms, id",
+        (ist.date().isoformat(), now_ms),
     ).fetchall()
     state = PortfolioState(capital=_wallet_a(conn), start_capital=100_000.0, open_intraday=int(open_n))
     state.open_symbols = set(open_syms)
@@ -326,9 +345,54 @@ def job_book_a_minute(
         )
         tid = int(cur.lastrowid)
         _mark_signal(conn, sid, "filled", trade_id=tid)
+        # The entry minute can already hit the stop or target (conservative, same as the backtest).
+        entered = conn.execute("SELECT * FROM trades WHERE id=?", (tid,)).fetchone()
+        _, ev = step_exits(_position(entered), nbar, rules, atr=None)
+        if ev:
+            _close_trade(conn, entered, ev.price, ev.ts_ms, ev.reason)
+            stats["exits"] += 1
+            stats["entries"] += 1
+            continue
         open_syms.add(sig.symbol)
         state.open_intraday += 1
         state.open_symbols.add(sig.symbol)
         stats["entries"] += 1
     conn.commit()
     return stats
+
+
+FLUSH_GRACE_MS = 15_000
+SESSION_FIRST_MINUTE = (9, 15)
+
+
+def run_book_a_until(conn: sqlite3.Connection, source: MinuteBarSource, *, now_ms: int) -> dict[str, Any]:
+    """Process every finished minute since the last run, oldest first (live driver).
+
+    Why: the recorder appends a minute's bar only after that minute ends (flush every ~5 s), so the minute
+    containing "now" never has a bar yet. A cursor per trade date also catches up minutes the scheduler
+    missed instead of skipping their stops.
+    """
+    _ensure_schema(conn)
+    ist = datetime.fromtimestamp(now_ms / 1000, tz=IST)
+    day = ist.date().isoformat()
+    first = int(ist.replace(hour=SESSION_FIRST_MINUTE[0], minute=SESSION_FIRST_MINUTE[1], second=0,
+                            microsecond=0).timestamp() * 1000)
+    last_done = (now_ms - FLUSH_GRACE_MS) // 60_000 * 60_000 - 60_000
+    row = conn.execute("SELECT last_minute_ms FROM book_a_cursor WHERE trade_date=?", (day,)).fetchone()
+    minute = max(first, int(row["last_minute_ms"]) + 60_000) if row else first
+    totals: dict[str, Any] = {"entries": 0, "exits": 0, "refusals": {}, "minutes": 0}
+    while minute <= last_done:
+        st = job_book_a_minute(conn, source, now_ms=minute + 59_000)
+        if st.get("skipped"):
+            return st
+        totals["entries"] += st["entries"]
+        totals["exits"] += st["exits"]
+        for k, v in st["refusals"].items():
+            totals["refusals"][k] = totals["refusals"].get(k, 0) + v
+        totals["minutes"] += 1
+        conn.execute(
+            "INSERT OR REPLACE INTO book_a_cursor(trade_date, last_minute_ms) VALUES (?,?)", (day, minute)
+        )
+        conn.commit()
+        minute += 60_000
+    return totals

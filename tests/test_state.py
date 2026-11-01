@@ -17,7 +17,7 @@ def test_migrate_empty_and_idempotent(tmp_path):
     conn = init_db(db)
     v1 = migrate(conn)
     v2 = migrate(conn)
-    assert v1 == v2 == 6  # 001–006 (+ 006 book_a)
+    assert v1 == v2 == 7  # 001–007 (006 book_a, 007 book_a_cursor)
     tables = {
         r[0]
         for r in conn.execute(
