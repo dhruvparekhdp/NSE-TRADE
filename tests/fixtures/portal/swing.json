@@ -22,11 +22,13 @@
       "stop_init": 1340.0,
       "stop_now": 1362.5,
       "mark": 1431.0,
+      "mark_source": "quote",
+      "mark_age_s": 40.0,
       "r_now": 0.46,
       "unrealised_inr": 427.5,
       "sessions_held": 4,
       "sessions_left": 16,
-      "entry_ms": 1792381500000
+      "entry_ms": 1792384200000
     }
   ],
   "closed": {

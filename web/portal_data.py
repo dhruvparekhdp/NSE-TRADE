@@ -332,11 +332,37 @@ def _marks(quotes: dict[str, Any]) -> dict[str, float]:
     return {q["symbol"]: q["ltp"] for q in quotes["quotes"] if q.get("ltp") is not None}
 
 
-def position_row(t: dict[str, Any], marks: dict[str, float], now_ms: int, cal: Calendar | None) -> dict[str, Any]:
+def _mark_chain(
+    symbols: set[str],
+    quotes: dict[str, Any],
+    now_ms: int,
+) -> dict[str, Any]:
+    from data.lake import Lake
+    from data.mark_sources import build_marks
+
+    settings = get_settings()
+    data_dir = Path(settings.data_dir)
+    lake = Lake(data_dir / "lake") if (data_dir / "lake").exists() else None
+    mq = build_marks(symbols, quotes=quotes, data_dir=data_dir, lake=lake, now_ms=now_ms)
+    return mq
+
+
+def position_row(
+    t: dict[str, Any],
+    marks: dict[str, float],
+    now_ms: int,
+    cal: Calendar | None,
+    *,
+    mark_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     side = -1 if t.get("side") == -1 else 1
     entry, qty = _num(t.get("entry_price")), int(t.get("qty") or 0)
     stop_init, stop_now = _num(t.get("stop_init")), _num(t.get("stop_now"))
-    mark = marks.get(t["symbol"])
+    sym = t["symbol"]
+    meta = (mark_meta or {}).get(sym.upper()) if mark_meta else None
+    mark = marks.get(sym)
+    if mark is None and meta is not None:
+        mark = getattr(meta, "mark", None) if not isinstance(meta, dict) else meta.get("mark")
     risk = abs(entry - stop_init) if entry is not None and stop_init is not None else 0.0
     r_now = side * (mark - entry) / risk if mark is not None and entry is not None and risk > 0 else None
     unreal = side * (mark - entry) * qty if mark is not None and entry is not None else None
@@ -355,6 +381,8 @@ def position_row(t: dict[str, Any], marks: dict[str, float], now_ms: int, cal: C
         "stop_init": stop_init,
         "stop_now": stop_now,
         "mark": mark,
+        "mark_source": (meta.mark_source if hasattr(meta, "mark_source") else meta.get("mark_source") if isinstance(meta, dict) else None),
+        "mark_age_s": (meta.mark_age_s if hasattr(meta, "mark_age_s") else meta.get("mark_age_s") if isinstance(meta, dict) else None),
         "r_now": r_now,
         "unrealised_inr": unreal,
         "sessions_held": held,
@@ -424,8 +452,11 @@ def _takeskip(conn: sqlite3.Connection | None) -> dict[str, Any]:
 
 
 def build_swing(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms: int) -> dict[str, Any]:
-    cal, marks = _calendar(), _marks(quotes)
+    cal = _calendar()
     open_rows = rows(conn, "SELECT * FROM trades WHERE status='open' AND book='B' ORDER BY entry_ms")
+    syms = {str(r["symbol"]).upper() for r in open_rows}
+    mark_meta = _mark_chain(syms, quotes, now_ms)
+    marks = {**_marks(quotes), **{k: v.mark for k, v in mark_meta.items()}}
     last = rows(conn, "SELECT * FROM trades WHERE status='closed' AND book='B' ORDER BY exit_ms DESC LIMIT 200")
     settings = get_settings()
     min_pos = get_setting("min_position_cnc_inr", settings.min_position_inr)
@@ -439,7 +470,7 @@ def build_swing(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms:
             "vol_rank_max": float(get_setting("market_filter_vol_rank_max", 0.667)),
             "excluded": list(get_setting("universe_excluded", []) or []),
         },
-        "open": [position_row(t, marks, now_ms, cal) for t in open_rows],
+        "open": [position_row(t, marks, now_ms, cal, mark_meta=mark_meta) for t in open_rows],
         "closed": {**_closed_stats(conn, "AND book='B'"), "last": [closed_row(t) for t in last]},
         "takeskip": _takeskip(conn),
     }
@@ -463,51 +494,76 @@ def _sum_costs(trades: list[dict[str, Any]]) -> dict[str, Any]:
     return total
 
 
-def _cycle(conn: sqlite3.Connection | None) -> dict[str, Any] | None:
-    return one(conn, "SELECT * FROM paper_cycles ORDER BY id DESC LIMIT 1")
+def _cycle(conn: sqlite3.Connection | None, book: str = "B") -> dict[str, Any] | None:
+    if conn is None:
+        return None
+    return one(
+        conn,
+        "SELECT * FROM paper_cycles WHERE COALESCE(book,'B')=? ORDER BY id DESC LIMIT 1",
+        (book,),
+    )
 
 
 def build_paper(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms: int) -> dict[str, Any]:
-    cal, marks = _calendar(), _marks(quotes)
-    cyc = _cycle(conn)
+    cal = _calendar()
+    cyc = _cycle(conn, "B")
+    cyc_a = _cycle(conn, "A")
     open_rows = rows(conn, "SELECT * FROM trades WHERE status='open' ORDER BY entry_ms")
-    positions = [position_row(t, marks, now_ms, cal) for t in open_rows]
+    open_b = [t for t in open_rows if t.get("book") == "B"]
+    open_a = [t for t in open_rows if t.get("book") == "A"]
+    syms = {str(r["symbol"]).upper() for r in open_rows}
+    mark_meta = _mark_chain(syms, quotes, now_ms)
+    marks = {**_marks(quotes), **{k: v.mark for k, v in mark_meta.items()}}
+    positions = [position_row(t, marks, now_ms, cal, mark_meta=mark_meta) for t in open_rows]
+    pos_b = [position_row(t, marks, now_ms, cal, mark_meta=mark_meta) for t in open_b]
+    pos_a = [position_row(t, marks, now_ms, cal, mark_meta=mark_meta) for t in open_a]
     closed = rows(conn, "SELECT * FROM trades WHERE status='closed' ORDER BY exit_ms DESC")
-    if cyc and "cycle_id" in (closed[0] if closed else {}):
-        closed = [t for t in closed if t.get("cycle_id") == cyc["id"]]
-    n = len(closed)
-    net = sum(float(t.get("net_inr") or 0.0) for t in closed)
-    wins = sum(1 for t in closed if (t.get("r_mult") or 0) > 0)
-    unreal_known = [p["unrealised_inr"] for p in positions if p["unrealised_inr"] is not None]
-    unreal = (
-        sum(unreal_known) if positions and len(unreal_known) == len(positions) else (0.0 if not positions else None)
-    )
-    equity = None
-    if cyc:  # wallet is the cash balance; held shares are valued at the last quote (or cost if unquoted)
-        held = sum(p["qty"] * (p["mark"] if p["mark"] is not None else (p["entry"] or 0.0)) for p in positions)
-        equity = float(cyc["wallet"]) + held
+    closed_b = [t for t in closed if t.get("book") == "B"]
+    closed_a = [t for t in closed if t.get("book") == "A"]
+
+    def _book_block(cyc_row: dict[str, Any] | None, pos: list, closed_rows: list) -> dict[str, Any]:
+        n = len(closed_rows)
+        net = sum(float(t.get("net_inr") or 0.0) for t in closed_rows)
+        wins = sum(1 for t in closed_rows if (t.get("r_mult") or 0) > 0)
+        total_r = sum(float(t.get("r_mult") or 0.0) for t in closed_rows)
+        unreal_known = [p["unrealised_inr"] for p in pos if p["unrealised_inr"] is not None]
+        unreal = sum(unreal_known) if pos and len(unreal_known) == len(pos) else (0.0 if not pos else None)
+        equity = None
+        if cyc_row:
+            held = sum(p["qty"] * (p["mark"] if p["mark"] is not None else (p["entry"] or 0.0)) for p in pos)
+            equity = float(cyc_row["wallet"]) + held
+        return {
+            "enabled": cyc_row is not None,
+            "running": bool(cyc_row and cyc_row.get("status") == "running"),
+            "cycle": {
+                "id": cyc_row["id"] if cyc_row else None,
+                "started_ms": cyc_row.get("started_ms") if cyc_row else None,
+                "target_wallet": _num(cyc_row.get("target_wallet")) if cyc_row else None,
+                "wallet": _num(cyc_row["wallet"]) if cyc_row else None,
+                "starting_wallet": _num(cyc_row["starting_wallet"]) if cyc_row else None,
+                "peak_wallet": _num(cyc_row["peak_wallet"]) if cyc_row else None,
+            },
+            "equity": equity,
+            "unrealised": unreal,
+            "positions": pos,
+            "summary": {
+                "trades": n,
+                "win_rate_pct": wins / n * 100.0 if n else None,
+                "net_pnl": net,
+                "net_r": total_r,
+                "expectancy_per_trade": net / n if n else None,
+                "costs": _sum_costs(closed_rows),
+            },
+            "history": [closed_row(t) for t in closed_rows[:100]],
+        }
+
     return {
-        "enabled": cyc is not None,
-        "running": bool(cyc and cyc.get("status") == "running"),
-        "cycle": {
-            "id": cyc["id"] if cyc else None,
-            "started_ms": cyc["started_ms"] if cyc else None,
-            "starting_wallet": _num(cyc["starting_wallet"]) if cyc else None,
-            "target_wallet": _num(cyc.get("target_wallet")) if cyc else None,
-            "wallet": _num(cyc["wallet"]) if cyc else None,
-            "peak_wallet": _num(cyc["peak_wallet"]) if cyc else None,
-        },
-        "equity": equity,
-        "unrealised": unreal,
+        "enabled": cyc is not None or cyc_a is not None,
+        "book_b": _book_block(cyc, pos_b, closed_b),
+        "book_a": _book_block(cyc_a, pos_a, closed_a),
+        # legacy flat fields = Book B swing book
+        **_book_block(cyc, pos_b, closed_b),
         "positions": positions,
-        "summary": {
-            "trades": n,
-            "win_rate_pct": wins / n * 100.0 if n else None,
-            "net_pnl": net,
-            "expectancy_per_trade": net / n if n else None,
-            "costs": _sum_costs(closed),
-        },
-        "history": [closed_row(t) for t in closed[:100]],
     }
 
 
@@ -1139,7 +1195,7 @@ SETTINGS_WHITELIST: dict[str, tuple[str, Any, Any]] = {
     "kill_switch": ("bool", None, None),
     "max_open_swing": ("int", 1, 10),
     "risk_per_trade_pct": ("float", 0.1, 1.0),
-    "book_a_mode": ("choice", ("off", "shadow"), None),
+    "book_a_mode": ("choice", ("off", "shadow", "paper"), None),
     "market_filter": ("choice", ("on", "off", "shadow"), None),
 }
 
@@ -1151,6 +1207,8 @@ def validate_setting(key: str, value: Any) -> Any:
     kind, lo, hi = SETTINGS_WHITELIST[key]
     if key == "market_filter" and str(value).lower() == "off" and get_settings().mode == "live":
         raise ValueError("market filter off is not allowed in live mode")
+    if key == "book_a_mode" and str(value).lower() == "paper" and get_settings().mode == "live":
+        raise ValueError("book A paper mode is not allowed in live mode")
     if kind == "bool":
         if not isinstance(value, bool):
             raise ValueError("must be true or false")
@@ -1166,6 +1224,45 @@ def validate_setting(key: str, value: Any) -> Any:
     if isinstance(value, bool) or not (lo <= num <= hi):
         raise ValueError(f"must be between {lo} and {hi}")
     return num
+
+
+def health_extras(conn: sqlite3.Connection | None, now_ms: int) -> dict[str, Any]:
+    from engine.login_guard import guard_status
+
+    settings = get_settings()
+    data_dir = Path(settings.data_dir)
+    today = to_ist(now_ms).date().strftime("%Y%m%d")
+    bars_path = data_dir / "ws" / f"bars_1m_{today}.jsonl"
+    quotes_path = data_dir / "quotes_cache.json"
+    bars_age = (now_ms / 1000.0 - bars_path.stat().st_mtime) if bars_path.exists() else None
+    quotes_age = (now_ms / 1000.0 - quotes_path.stat().st_mtime) if quotes_path.exists() else None
+    login_row = one(conn, "SELECT trade_date, login_ok FROM sessions ORDER BY trade_date DESC LIMIT 1")
+    book_a_n = 0
+    if conn:
+        book_a_n = int(
+            conn.execute(
+                "SELECT COUNT(*) AS n FROM signals WHERE book='A' AND trade_date=?",
+                (to_ist(now_ms).date().isoformat(),),
+            ).fetchone()["n"]
+        )
+    scan_run = fill_run = None
+    if conn:
+        iso = to_ist(now_ms).date().isoformat()
+        scan_run = one(conn, "SELECT completed_ms FROM paper_runs WHERE trade_date=? AND job='scan'", (iso,))
+        fill_run = one(conn, "SELECT completed_ms FROM paper_runs WHERE trade_date=? AND job='eod_fill'", (iso,))
+    guard = guard_status(conn) if conn else {"blocked": False, "ab1007_streak": 0, "key_version_ms": 0}
+    return {
+        "last_login_ok": bool(login_row and login_row["login_ok"]),
+        "last_login_date": login_row["trade_date"] if login_row else None,
+        "recorder_bars_age_s": bars_age,
+        "quotes_cache_age_s": quotes_age,
+        "book_a_signals_today": book_a_n,
+        "paper_scan_done_ms": scan_run["completed_ms"] if scan_run else None,
+        "paper_fill_done_ms": fill_run["completed_ms"] if fill_run else None,
+        "market_filter": get_setting("market_filter", "on"),
+        "book_a_mode": get_setting("book_a_mode", settings.book_a_mode),
+        "login_guard": guard,
+    }
 
 
 def build_settings(now_ms: int) -> dict[str, Any]:
