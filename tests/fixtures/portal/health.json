@@ -23,6 +23,20 @@
   ],
   "memory_mb": 180.0,
   "memory_limit_mb": 600,
+  "last_login_ok": true,
+  "last_login_date": "2026-10-23",
+  "recorder_bars_age_s": null,
+  "quotes_cache_age_s": null,
+  "book_a_signals_today": 0,
+  "paper_scan_done_ms": null,
+  "paper_fill_done_ms": null,
+  "market_filter": "on",
+  "book_a_mode": "shadow",
+  "login_guard": {
+    "blocked": false,
+    "ab1007_streak": 0,
+    "key_version_ms": 0
+  },
   "sources": [
     {
       "id": "quotes",

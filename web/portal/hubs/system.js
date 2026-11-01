@@ -21,13 +21,18 @@
     render: function (el, D) {
       var h = D.health; if (!h) { el.innerHTML = C.state(D, "health"); return; }
       var m = D.meta || {};
+      var lg = h.login_guard || {};
+      var loginDetail = h.last_login_ok ? "ok " + (h.last_login_date || "") : "not ok";
+      if (lg.blocked) loginDetail = "MPIN guard · fix keys";
       el.innerHTML = C.tiles([
         ["STATUS", h.ok ? "ok" : "problem", h.status || "", h.ok ? "up" : "dn"],
-        ["MODE", String(h.mode || "").toUpperCase(), "live orders " + (h.live_orders ? "ON" : "off")],
-        ["ANGEL", h.angel_configured ? (h.login_ok ? "logged in" : "keys set") : "no keys", h.ws_connected ? "feed connected" : "feed idle"],
-        ["SESSION", h.session_state || "—", m.calendar_ok ? "calendar " + m.calendar_year_loaded + " ok" : "calendar missing"],
-        ["COSTS", m.costs_verified ? "verified" : "not verified", "contract note pending"],
-        ["VERSION", m.version || "—", ""]
+        ["MODE", String(h.mode || "").toUpperCase(), "Book A " + (h.book_a_mode || "shadow") + " · filter " + (h.market_filter || "on")],
+        ["LOGIN", loginDetail, h.angel_configured ? "engine session" : "no keys", h.last_login_ok ? "up" : "dn"],
+        ["RECORDER", U.num(h.recorder_bars_age_s) ? Math.round(h.recorder_bars_age_s) + "s old" : "no file", "quotes " + (U.num(h.quotes_cache_age_s) ? Math.round(h.quotes_cache_age_s) + "s" : "—")],
+        ["BOOK A SIGS", String(h.book_a_signals_today != null ? h.book_a_signals_today : "—"), "today"],
+        ["PAPER B", h.paper_scan_done_ms ? "scan " + U.stamp(h.paper_scan_done_ms) : "scan pending", h.paper_fill_done_ms ? "fill " + U.stamp(h.paper_fill_done_ms) : "fill pending"],
+        ["SESSION", h.session_state || "—", h.ws_connected ? "WS on" : "WS off · bars/quotes ages above"],
+        ["VERSION", m.version || "—", lg.ab1007_streak ? "AB1007 streak " + lg.ab1007_streak : ""]
       ]);
     }
   });

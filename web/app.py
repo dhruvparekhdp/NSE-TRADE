@@ -65,6 +65,7 @@ async def handle_health(request: web.Request) -> web.Response:
         "memory_mb": portal_data.memory_mb(),
         "memory_limit_mb": 600,
         "sources": portal_data.source_rows(quotes, settings.angel_configured, login_ok, now_ms),
+        **portal_data.health_extras(conn, now_ms),
     }
     return web.json_response(body)
 
