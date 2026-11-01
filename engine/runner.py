@@ -75,11 +75,22 @@ class EngineRunner:
         today = datetime.now(IST_Z).date()
         if getattr(self, "_daily_candle_api", None) is not None and getattr(self, "_login_date", None) == today:
             return True
+        from config.secrets_loader import apply_db_secrets
         from engine.angel_session import AngelCandleClient, angel_login, record_session
+        from engine.login_guard import login_blocked, record_login_result
 
+        if login_blocked(self.db):
+            log.warning("job: Angel login skipped (MPIN lockout guard active)")
+            return False
+        try:
+            apply_db_secrets()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("job: secrets reload failed: %s", exc)
         try:
             api = await asyncio.to_thread(angel_login, get_settings())
+            record_login_result(self.db, ok=True)
         except Exception as exc:  # noqa: BLE001
+            record_login_result(self.db, ok=False, error=str(exc))
             record_session(self.db, today, False, str(exc))
             log.warning("job: Angel login failed: %s", exc)
             return False
@@ -181,6 +192,24 @@ class EngineRunner:
         today = datetime.now(IST_Z).date()
         n = await asyncio.to_thread(job_pending, self.db, trade_date=today)
         log.info("job: pending_orders ready n=%s", n)
+
+    async def job_book_a_paper(self) -> None:
+        if not self._trading_day_ok():
+            return
+        ist = datetime.now(IST_Z)
+        if ist.hour < 9 or (ist.hour == 9 and ist.minute < 16) or ist.hour > 15 or (ist.hour == 15 and ist.minute > 0):
+            return
+        from engine.book_a_paper import JsonlMinuteBarSource, job_book_a_minute
+
+        today = ist.date()
+        path = self.data_dir / "ws" / f"bars_1m_{today.strftime('%Y%m%d')}.jsonl"
+        source = JsonlMinuteBarSource(path)
+        now_ms = int(ist.timestamp() * 1000)
+        try:
+            stats = await asyncio.to_thread(job_book_a_minute, self.db, source, now_ms=now_ms)
+            log.info("job: book_a_paper %s", stats)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("book_a_paper failed: %s", exc)
 
     async def job_book_a_shadow(self) -> None:
         if not self._trading_day_ok(allow_special_entries=False):
@@ -421,6 +450,7 @@ class EngineRunner:
             ("*/15 8-16 * * mon-fri", self.job_news, "news"),
             ("*/5 8-16 * * mon-fri", self.job_cues, "cues"),
             ("*/5 9-15 * * mon-fri", self.job_free_quotes, "free_quotes"),
+            ("*/1 9-15 * * mon-fri", self.job_book_a_paper, "book_a_paper"),
             ("*/5 9-15 * * mon-fri", self.job_book_a_shadow, "book_a_shadow"),
             ("*/5 9-14 * * mon-fri", self.job_opening_scorecard, "opening_scorecard"),
             ("*/1 9 * * mon-fri", self.job_preopen, "preopen"),

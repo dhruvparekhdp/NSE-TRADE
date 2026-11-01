@@ -442,8 +442,10 @@ async def test_settings_are_whitelisted_logged_and_never_touch_live_flags(seeded
     assert json.loads(row["json"]) == {"key": "max_open_swing", "old": 4, "new": 3}
     ok_mf = await seeded.post("/api/settings", json={"key": "market_filter", "value": "shadow"})
     assert ok_mf.status == 200
+    ok_a = await seeded.post("/api/settings", json={"key": "book_a_mode", "value": "paper"})
+    assert ok_a.status == 200
     for key, value in (("live_orders", True), ("mode", "live"), ("market_filter", "nifty_vol"), ("max_open_swing", 99),
-                       ("risk_per_trade_pct", 5), ("book_a_mode", "paper"), ("kill_switch", "yes")):
+                       ("risk_per_trade_pct", 5), ("kill_switch", "yes")):
         bad = await seeded.post("/api/settings", json={"key": key, "value": value})
         assert bad.status == 400, (key, value)
     meta = await (await seeded.get("/api/portal/meta")).json()

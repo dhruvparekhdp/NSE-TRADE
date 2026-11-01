@@ -3,28 +3,46 @@
   "use strict";
   var U = UI.U, C = UI.C, e = U.esc;
   function cls(x) { return U.num(x) ? (x >= 0 ? "up" : "dn") : ""; }
+  function markLabel(p) {
+    var s = U.px(p.mark);
+    if (p.mark_source) {
+      s += " · " + e(p.mark_source);
+      if (U.num(p.mark_age_s)) s += " " + Math.round(p.mark_age_s) + "s";
+    }
+    return s;
+  }
+  function bookTiles(label, p) {
+    if (!p || !p.cycle || p.cycle.id == null) return "";
+    var c = p.cycle, s = p.summary || {}, k = s.costs || {};
+    var costTotal = U.sum(Object.keys(k).map(function (x) { return k[x]; }));
+    return '<div class="hero-band"><b>' + e(label) + "</b></div>" + C.tiles([
+      ["EQUITY", U.inr(p.equity), "start " + U.inr(c.starting_wallet), cls((p.equity || 0) - (c.starting_wallet || 0))],
+      ["CASH", U.inr(c.wallet), "free / margin"],
+      ["NET P&L", U.inr(s.net_pnl, true), "net R " + U.rr(s.net_r), cls(s.net_pnl)],
+      ["COSTS", U.inr(costTotal), (s.trades || 0) + " closed", "dn"]
+    ]);
+  }
 
   // ------------------------------------------------------------------ Paper book
   UI.widget("paper-tiles", {
     bare: true, uses: ["paper"],
     render: function (el, D) {
       var p = D.paper; if (!p) { el.innerHTML = C.state(D, "paper"); return; }
-      if (!p.cycle || p.cycle.id == null) {
-        el.innerHTML = '<div class="hero-band"><b>NO PAPER CYCLE YET</b><span>The cycle starts with the first 16:20 IST scan on a trading day. ' +
-          "Until a strategy is enabled in Settings, every signal is logged in shadow and its outcome tracked.</span></div>";
+      var swing = p.book_b || p;
+      var intra = p.book_a;
+      if (!swing.cycle || swing.cycle.id == null) {
+        el.innerHTML = '<div class="hero-band"><b>NO PAPER CYCLE YET</b><span>Book B swing starts at 16:20 IST. Book A intraday paper uses its own ₹1L wallet when BOOK_A_MODE=paper.</span></div>';
         return;
       }
-      var c = p.cycle, s = p.summary || {}, k = s.costs || {};
+      var c = swing.cycle, s = swing.summary || {}, k = s.costs || {};
       var costTotal = U.sum(Object.keys(k).map(function (x) { return k[x]; }));
-      el.innerHTML = C.tiles([
-        ["EQUITY", U.inr(p.equity), "start " + U.inr(c.starting_wallet) + " · peak " + U.inr(c.peak_wallet), cls(p.equity - c.starting_wallet)],
-        ["CASH", U.inr(c.wallet), "free for new buys"],
-        ["UNREALISED", U.inr(p.unrealised, true), (p.positions || []).length + " open", cls(p.unrealised)],
-        ["NET P&L", U.inr(s.net_pnl, true), "after all costs", cls(s.net_pnl)],
-        ["HIT RATE", s.trades ? Math.round(s.win_rate_pct) + "%" : "—", (s.trades || 0) + " closed · exp " + U.inr(s.expectancy_per_trade, true)],
-        ["COSTS", U.inr(costTotal), Object.keys(k).map(function (x) { return x + " " + U.inr(k[x]); }).join(" · ")],
-        ["CYCLE", "#" + c.id, "started " + U.stamp(c.started_ms)]
-      ]);
+      el.innerHTML = bookTiles("BOOK B · SWING", swing) + (intra && intra.enabled ? bookTiles("BOOK A · INTRADAY (MIS)", intra) : "") +
+        C.tiles([
+          ["UNREALISED B", U.inr(swing.unrealised, true), (swing.positions || []).length + " open", cls(swing.unrealised)],
+          ["HIT RATE B", s.trades ? Math.round(s.win_rate_pct) + "%" : "—", "exp " + U.inr(s.expectancy_per_trade, true)],
+          ["CYCLE B", "#" + c.id, "peak " + U.inr(c.peak_wallet)],
+          ["COSTS B", U.inr(costTotal), Object.keys(k).map(function (x) { return x + " " + U.inr(k[x]); }).join(" · ")]
+        ]);
     }
   });
   UI.widget("paper-positions", {
@@ -38,7 +56,7 @@
         return '<div class="pos"><div class="pos-top"><b>' + e(p.symbol) + "</b>" + C.side(1) + "</div>" +
           '<div class="mono small dim">' + e(U.name(p.strategy)) + " · " + e(p.qty) + " sh</div>" +
           '<div class="pos-r ' + cls(p.r_now) + '">' + U.rr(p.r_now) + "</div>" + C.rbar(p.r_now) +
-          '<div class="mono tiny dim">in ' + U.px(p.entry) + " · now " + U.px(p.mark) + " · stop " + U.px(p.stop_now) +
+          '<div class="mono tiny dim">in ' + U.px(p.entry) + " · now " + markLabel(p) + " · stop " + U.px(p.stop_now) +
           (p.stop_now !== p.stop_init ? " (was " + U.px(p.stop_init) + ")" : "") + "</div>" +
           '<div class="mono tiny">' + U.inr(p.unrealised_inr, true) + " · " + e(p.sessions_left) + " sessions left</div></div>";
       }).join("") + "</div>";

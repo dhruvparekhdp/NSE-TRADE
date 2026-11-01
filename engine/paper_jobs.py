@@ -203,7 +203,9 @@ def _cnc_sell_cash_credit(sell_value: float, slippage_pct: float = 0.05) -> floa
 
 
 def ensure_paper_cycle(conn: sqlite3.Connection, capital: float = 100_000.0) -> None:
-    row = conn.execute("SELECT id FROM paper_cycles WHERE status='running' LIMIT 1").fetchone()
+    row = conn.execute(
+        "SELECT id FROM paper_cycles WHERE status='running' AND COALESCE(book,'B')='B' LIMIT 1"
+    ).fetchone()
     if row:
         return
     ms = int(datetime.now(tz=IST).timestamp() * 1000)
@@ -216,14 +218,16 @@ def ensure_paper_cycle(conn: sqlite3.Connection, capital: float = 100_000.0) -> 
 
 
 def _wallet(conn: sqlite3.Connection) -> float:
-    row = conn.execute("SELECT wallet FROM paper_cycles WHERE status='running' ORDER BY id DESC LIMIT 1").fetchone()
+    row = conn.execute(
+        "SELECT wallet FROM paper_cycles WHERE status='running' AND COALESCE(book,'B')='B' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
     return float(row["wallet"]) if row else 100_000.0
 
 
 def _bump_wallet(conn: sqlite3.Connection, delta: float) -> None:
     conn.execute(
         "UPDATE paper_cycles SET wallet = wallet + ?, peak_wallet = MAX(peak_wallet, wallet + ?) "
-        "WHERE status='running'",
+        "WHERE status='running' AND COALESCE(book,'B')='B'",
         (delta, delta),
     )
     conn.commit()

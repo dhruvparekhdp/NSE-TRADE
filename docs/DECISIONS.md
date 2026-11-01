@@ -146,3 +146,11 @@ Decisions:
 - Store 1s bars only for event windows ±5 sessions by default (disk/RAM cap); full FY at 1m per plan A7.
 - `news_filter_enabled` remains **false** until E* trials show lift in both halves where data exists.
 - Hermes = port **pattern** (dedupe + `ask_json` extract), not shared crypto trading DB.
+
+## 2026-11-01 — Book A paper wallet separate from Book B (C12/C19)
+
+**Decision:** Book A intraday paper uses its own `paper_cycles` row with `book='A'` and ₹1,00,000 starting wallet. Book B swing wallet and open CNC positions are unchanged.
+
+**Why:** Book B already holds ~₹17k cash and four swing lines; mixing MIS intraday margin with CNC cash would double-count and break C17 equity rules. MIS uses 20% margin (5×); blocked margin and closed P&L move only the Book A wallet.
+
+**Owner:** Claude planner for Monday 2 Nov 2026 paper run.
