@@ -96,3 +96,27 @@ def test_build_paper_equity_uses_mark_not_entry(tmp_path, monkeypatch):
     body = build_paper(conn, {"quotes": [], "ts_ms": now_ms}, now_ms)
     assert body["positions"][0]["mark"] == 150.0
     assert body["equity"] == 80000 + 100 * 150.0
+
+
+def test_book_a_equity_is_wallet_plus_open_pnl(tmp_path, monkeypatch):
+    """MIS positions block margin only; counting their full value as holdings inflated equity ~4x (2 Nov)."""
+    from engine.book_a_paper import ensure_book_a_cycle
+    from engine.state import init_db
+
+    data_dir = tmp_path / "var"
+    (data_dir / "ws").mkdir(parents=True)
+    from config.settings import get_settings, reset_settings_cache
+
+    reset_settings_cache()
+    monkeypatch.setattr(get_settings(), "data_dir", str(data_dir))
+    conn = init_db(data_dir / "engine.db")
+    ensure_book_a_cycle(conn, capital=100_000.0)
+    now_ms = int(datetime(2026, 11, 2, 12, 0, tzinfo=IST).timestamp() * 1000)
+    conn.execute(
+        "INSERT INTO trades(symbol, book, strategy, side, qty, entry_ms, entry_price, "
+        "stop_init, stop_now, mode, status) VALUES ('X','A','S1_orb',1,1000,?,100,99,99,'paper','open')",
+        (now_ms - 60_000,),
+    )
+    conn.commit()
+    body = build_paper(conn, {"quotes": [{"symbol": "X", "ltp": 101.0}], "ts_ms": now_ms}, now_ms)
+    assert body["book_a"]["equity"] == 100_000.0 + 1000 * 1.0

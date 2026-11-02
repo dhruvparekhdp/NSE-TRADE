@@ -521,7 +521,9 @@ def build_paper(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms:
     closed_b = [t for t in closed if t.get("book") == "B"]
     closed_a = [t for t in closed if t.get("book") == "A"]
 
-    def _book_block(cyc_row: dict[str, Any] | None, pos: list, closed_rows: list) -> dict[str, Any]:
+    def _book_block(
+        cyc_row: dict[str, Any] | None, pos: list, closed_rows: list, *, margin_book: bool = False
+    ) -> dict[str, Any]:
         n = len(closed_rows)
         net = sum(float(t.get("net_inr") or 0.0) for t in closed_rows)
         wins = sum(1 for t in closed_rows if (t.get("r_mult") or 0) > 0)
@@ -529,7 +531,11 @@ def build_paper(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms:
         unreal_known = [p["unrealised_inr"] for p in pos if p["unrealised_inr"] is not None]
         unreal = sum(unreal_known) if pos and len(unreal_known) == len(pos) else (0.0 if not pos else None)
         equity = None
-        if cyc_row:
+        if cyc_row and margin_book:
+            # Book A (MIS) never debits the wallet at entry, it only blocks margin: equity = wallet + open P&L.
+            equity = float(cyc_row["wallet"]) + (unreal or 0.0)
+        elif cyc_row:
+            # Book B (CNC) paid cash at fill: equity = cash + shares at the mark (cost if unmarked).
             held = sum(p["qty"] * (p["mark"] if p["mark"] is not None else (p["entry"] or 0.0)) for p in pos)
             equity = float(cyc_row["wallet"]) + held
         return {
@@ -560,7 +566,7 @@ def build_paper(conn: sqlite3.Connection | None, quotes: dict[str, Any], now_ms:
     return {
         "enabled": cyc is not None or cyc_a is not None,
         "book_b": _book_block(cyc, pos_b, closed_b),
-        "book_a": _book_block(cyc_a, pos_a, closed_a),
+        "book_a": _book_block(cyc_a, pos_a, closed_a, margin_book=True),
         # legacy flat fields = Book B swing book
         **_book_block(cyc, pos_b, closed_b),
         "positions": positions,
