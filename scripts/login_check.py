@@ -15,25 +15,22 @@ def main() -> int:
     except ImportError:
         print("install smartapi-python pyotp first", file=sys.stderr)
         return 1
+    from config.broker_secrets import BrokerSecretsMissing, load_broker_secrets
     from config.secrets_loader import apply_db_secrets
-    from config.settings import get_settings
 
     try:
         applied = apply_db_secrets()
         print(f"loaded {len(applied)} keys from database")
     except Exception as exc:  # noqa: BLE001
         print(f"db secrets skipped: {exc}")
-    s = get_settings()
-    if not s.angel_configured:
-        print("Angel keys missing (DB /keys or .env)")
+    try:
+        secrets = load_broker_secrets()
+    except BrokerSecretsMissing as exc:
+        print(exc, file=sys.stderr)
         return 1
-    api = SmartConnect(api_key=s.angel_api_key.get_secret_value())  # type: ignore[union-attr]
-    totp = pyotp.TOTP(s.angel_totp_secret.get_secret_value()).now()  # type: ignore[union-attr]
-    sess = api.generateSession(
-        s.angel_client_code.get_secret_value(),  # type: ignore[union-attr]
-        s.angel_pin.get_secret_value(),  # type: ignore[union-attr]
-        totp,
-    )
+    api = SmartConnect(api_key=secrets.api_key)
+    totp = pyotp.TOTP(secrets.totp_secret).now()
+    sess = api.generateSession(secrets.client_code, secrets.pin, totp)
     print("1 LOGIN :", sess.get("status"), sess.get("message"), sess.get("errorcode"))
     if not sess.get("status"):
         return 2

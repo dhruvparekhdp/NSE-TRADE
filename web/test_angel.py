@@ -7,7 +7,7 @@ from typing import Any
 
 from aiohttp import web
 
-from config.settings import get_settings
+from config.broker_secrets import BrokerSecretsMissing, load_broker_secrets
 from web.angel_hints import hint_for
 from web.auth import require_admin
 from web.secure_channel import require_secure_channel
@@ -33,16 +33,17 @@ def run_test_angel(*, api: Any, totp_now: Any) -> dict[str, Any]:
     """Login → rmsLimit → allholding → position → logout. No tokens in the result."""
     from broker.angel import AngelBroker
 
-    settings = get_settings()
-    if not settings.angel_configured:
+    try:
+        secrets = load_broker_secrets()
+    except BrokerSecretsMissing:
         return {
             "ok": False,
             "error_code": "NOT_CONFIGURED",
             "hint": "Save Angel API key, client code, MPIN and TOTP secret first",
             "client_code_masked": None,
         }
-    code = settings.angel_client_code.get_secret_value() if settings.angel_client_code else ""
-    pin = settings.angel_pin.get_secret_value() if settings.angel_pin else ""
+    code = secrets.client_code
+    pin = secrets.pin
     totp = totp_now() if callable(totp_now) else ""
     out: dict[str, Any] = {
         "ok": False,
@@ -149,14 +150,22 @@ async def handle_test_angel(request: web.Request) -> web.Response:
     else:
         from broker.smartconnect_factory import build_smart_connect
 
+        try:
+            secrets = load_broker_secrets()
+        except BrokerSecretsMissing:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error_code": "NOT_CONFIGURED",
+                    "hint": "Save Angel API key, client code, MPIN and TOTP secret first",
+                    "client_code_masked": None,
+                }
+            )
         api = build_smart_connect()
         import pyotp
 
-        settings = get_settings()
-        secret = settings.angel_totp_secret.get_secret_value() if settings.angel_totp_secret else ""
-
         def totp_now() -> str:
-            return pyotp.TOTP(secret).now()
+            return pyotp.TOTP(secrets.totp_secret).now()
 
     body = run_test_angel(api=api, totp_now=totp_now)
     return web.json_response(body)

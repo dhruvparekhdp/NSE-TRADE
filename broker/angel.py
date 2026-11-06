@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import Any
 
 from broker.errors import AuthError, RateLimited, Rejected, Unavailable
+from config.broker_secrets import load_broker_secrets
 from config.settings import get_settings
 
 
@@ -55,12 +56,11 @@ class AngelBroker:
 
     def login(self) -> dict[str, Any]:
         assert self.api is not None
-        settings = get_settings()
-        code = settings.angel_client_code.get_secret_value() if settings.angel_client_code else ""
-        pin = settings.angel_pin.get_secret_value() if settings.angel_pin else ""
+        # Fail before generateSession. The error names the missing fields and does not call Angel.
+        secrets = load_broker_secrets()
         totp = self.totp_now() if self.totp_now else ""
         try:
-            resp = self.api.generateSession(code, pin, totp)
+            resp = self.api.generateSession(secrets.client_code, secrets.pin, totp)
         except Exception as exc:  # network
             raise Unavailable(str(exc)) from exc
         if not resp.get("status"):
