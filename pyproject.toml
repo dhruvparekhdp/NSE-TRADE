@@ -27,3 +27,50 @@ filterwarnings = [
   "ignore::DeprecationWarning",
   "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
 ]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "."
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_configs = true
+files = [
+  "broker",
+  "config",
+  "core",
+  "data",
+  "engine",
+  "integrations",
+  "lab",
+  "news",
+  "notify",
+  "scripts",
+  "storage",
+  "strategies",
+  "web",
+  "tests",
+]
+exclude = ["(?x)(\\.venv/|var/|data/lake/|data/reports/)"]
+
+# NSE-001: these modules already fail mypy. They stay unchecked so `make typecheck`
+# can run in CI without a behavior-changing cleanup. Drop a module from this list
+# once it typechecks clean.
+[[tool.mypy.overrides]]
+module = [
+  "config.settings",
+  "data.history",
+  "engine.state",
+  "lab.backtest",
+  "lab.ledger",
+  "lab.portfolio",
+  "notify.telegram",
+  "scripts.run_prereg_trials",
+  "strategies.gap",
+  "strategies.registry",
+  "tests.test_portal_api",
+  "tests.test_strategies_lab",
+  "tests.test_v2_daily_fills",
+  "web.portal_api",
+  "web.portal_data",
+]
+ignore_errors = true
