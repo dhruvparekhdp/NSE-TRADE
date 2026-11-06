@@ -1,7 +1,8 @@
 """Angel One SmartAPI wrapper (plan A8). Blocking SDK calls go through injectable runner.
 
-REAL ORDERS require settings.mode=='live' AND settings.live_orders==True.
-Place/modify/cancel raise if those flags are off.
+REAL ORDERS go through broker.live_guard.assert_live_orders_allowed().
+That needs LIVE_ORDERS_ENABLED and LIVE_ORDERS_CONFIRM, plus mode=live and live_orders.
+Place/modify/cancel raise if any of those are off. This module does not call the SDK order methods.
 """
 
 from __future__ import annotations
@@ -11,6 +12,10 @@ from collections.abc import Callable
 from typing import Any
 
 from broker.errors import AuthError, RateLimited, Rejected, Unavailable
+from broker.live_guard import assert_live_orders_allowed
+from broker.live_guard import cancel_order as guarded_cancel
+from broker.live_guard import modify_order as guarded_modify
+from broker.live_guard import place_order as guarded_place
 from config.settings import get_settings
 
 
@@ -104,31 +109,26 @@ class AngelBroker:
                 self.sleep(2.0 * (attempt + 1))
         raise RateLimited("AB1021 retries exhausted")
 
-    def _live_guard(self) -> None:
-        s = get_settings()
-        if not (s.mode == "live" and s.live_orders):
-            raise Rejected("live orders disabled (need mode=live AND live_orders=true)")
-
     def place_order(self, params: dict[str, Any]) -> dict[str, Any]:
-        self._live_guard()
+        assert_live_orders_allowed()
         self._throttle()
         assert self.api is not None
-        resp = self.api.placeOrder(params)
+        resp = guarded_place(self.api, params)
         self._map_error(resp)
         return resp
 
     def modify_order(self, params: dict[str, Any]) -> dict[str, Any]:
-        self._live_guard()
+        assert_live_orders_allowed()
         self._throttle()
         assert self.api is not None
-        resp = self.api.modifyOrder(params)
+        resp = guarded_modify(self.api, params)
         self._map_error(resp)
         return resp
 
     def cancel_order(self, order_id: str, variety: str = "NORMAL") -> dict[str, Any]:
-        self._live_guard()
+        assert_live_orders_allowed()
         self._throttle()
         assert self.api is not None
-        resp = self.api.cancelOrder(order_id, variety)
+        resp = guarded_cancel(self.api, order_id, variety)
         self._map_error(resp)
         return resp

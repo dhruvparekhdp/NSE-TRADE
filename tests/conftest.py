@@ -19,6 +19,8 @@ def _reset_settings():
     reset_settings_cache()
     s = get_settings()
     assert s.live_orders is False
+    assert s.live_orders_enabled is False
+    assert s.live_orders_confirm is False
     assert s.mode == "paper"
     yield
     reset_settings_cache()

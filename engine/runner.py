@@ -13,6 +13,7 @@ from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from broker.live_guard import startup_banner
 from config.settings import get_settings
 from data.calendar import CalendarMissing, job_should_run, load_default_calendar
 from engine.state import init_db
@@ -167,9 +168,8 @@ class EngineRunner:
         site = web.TCPSite(self._runner, self.settings.web_host, self.settings.web_port)
         await site.start()
         log.info(
-            "nse-engine listening on http://%s:%s status=%s",
-            self.settings.web_host,
-            self.settings.web_port,
+            "%s status=%s",
+            startup_banner(self.settings),
             "ok" if self.settings.angel_configured else "not configured",
         )
 
