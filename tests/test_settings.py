@@ -9,6 +9,8 @@ def test_defaults():
     s = get_settings()
     assert s.mode == "paper"
     assert s.live_orders is False
+    assert s.live_orders_enabled is False
+    assert s.live_orders_confirm is False
     assert s.capital_inr == 100_000.0
     assert s.min_position_inr == 100_000.0
     assert s.min_position_cnc_inr == 20_000.0
