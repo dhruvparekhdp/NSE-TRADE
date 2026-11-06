@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import bcrypt
 from aiohttp import web
 
 from config.settings import get_setting, get_settings
@@ -14,7 +13,12 @@ from core.clock import Clock, session_state
 from web.auth import (
     COOKIE_NAME,
     COOKIE_TTL_S,
+    admin_auth_middleware,
+    admin_configured,
+    login_rate_limited,
     make_session_cookie,
+    note_login_failure,
+    passwords_match,
     require_admin,
     session_hmac_secret,
 )
@@ -64,21 +68,17 @@ async def handle_health(request: web.Request) -> web.Response:
 
 async def handle_login(request: web.Request) -> web.Response:
     settings = get_settings()
+    if login_rate_limited(request):
+        raise web.HTTPTooManyRequests(text="login rate limit")
     try:
         data = await request.json()
     except json.JSONDecodeError as exc:
         raise web.HTTPBadRequest(text="invalid json") from exc
     password = data.get("password") or ""
-    admin_hash = settings.portal_admin_hash
-    plain = settings.admin_password.get_secret_value() if settings.admin_password else None
-    ok = False
-    if admin_hash:
-        ok = bcrypt.checkpw(password.encode(), admin_hash.encode())
-    elif plain:
-        ok = password == plain
-    if not (admin_hash or plain):
+    if not admin_configured():
         raise web.HTTPServiceUnavailable(text="portal admin not configured")
-    if not ok:
+    if not passwords_match(password):
+        note_login_failure(request)
         raise web.HTTPUnauthorized(text="bad password")
     secret = session_hmac_secret()
     if not secret:
@@ -115,6 +115,7 @@ async def handle_kill(request: web.Request) -> web.Response:
 
 
 async def handle_books(request: web.Request) -> web.Response:
+    require_admin(request)
     conn = request.app.get("db")
     empty = {"A": {"trades": 0, "avg_r": 0.0}, "B": {"trades": 0, "avg_r": 0.0}}
     if conn is None:
@@ -130,7 +131,7 @@ async def handle_books(request: web.Request) -> web.Response:
 
 
 def create_app(*, db: Any = None, clock: Clock | None = None) -> web.Application:
-    app = web.Application()
+    app = web.Application(middlewares=[admin_auth_middleware])
     if db is not None:
         app["db"] = db
     app["clock"] = clock or Clock()

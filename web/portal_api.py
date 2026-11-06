@@ -1,9 +1,9 @@
 """JSON APIs for the portal (PLAN_V2 §7). Thin aiohttp handlers over ``web/portal_data.py``.
 
 WHY: the front end is built against these shapes before the engine fills the tables behind them, so
-each handler returns the full shape with empty values when there is nothing to show. Reads are open
-(the portal sits behind Tailscale / the admin gate); anything that changes state or shows secrets needs
-the admin cookie, and writes also need a secure channel (V0-2).
+each handler returns the full shape with empty values when there is nothing to show. Market reads stay
+open on the localhost bind. Admin controls (today, strategies, settings, tables, universe, quote
+refresh) require the admin cookie or bearer token, and writes also need a secure channel (V0-2).
 """
 
 from __future__ import annotations
@@ -55,6 +55,7 @@ def _log_event(conn, kind: str, payload: dict[str, Any]) -> None:
 
 # ---------------------------------------------------------------- legacy (kept: the old pages and tests use them)
 async def handle_today(request: web.Request) -> web.Response:
+    require_admin(request)
     settings = get_settings()
     clock: Clock = request.app.get("clock", Clock())
     cache = read_quotes_cache(Path(settings.data_dir))
@@ -79,7 +80,8 @@ async def handle_today(request: web.Request) -> web.Response:
     return web.json_response(body)
 
 
-async def handle_strategies(_request: web.Request) -> web.Response:
+async def handle_strategies(request: web.Request) -> web.Response:
+    require_admin(request)
     from strategies.registry import ALL
 
     enabled = set(get_settings().strategies_enabled or [])

@@ -13,7 +13,7 @@ from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from config.settings import get_settings
+from config.settings import get_settings, resolve_bind_host
 from data.calendar import CalendarMissing, job_should_run, load_default_calendar
 from engine.state import init_db
 from notify.telegram import TelegramClient
@@ -164,11 +164,12 @@ class EngineRunner:
         self.scheduler.add_job(self.job_free_quotes, id="free_quotes_boot", replace_existing=True)
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
-        site = web.TCPSite(self._runner, self.settings.web_host, self.settings.web_port)
+        host = resolve_bind_host(self.settings)
+        site = web.TCPSite(self._runner, host, self.settings.web_port)
         await site.start()
         log.info(
             "nse-engine listening on http://%s:%s status=%s",
-            self.settings.web_host,
+            host,
             self.settings.web_port,
             "ok" if self.settings.angel_configured else "not configured",
         )

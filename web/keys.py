@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-import bcrypt
 from aiohttp import web
 
 from config import secret_box
@@ -199,14 +198,13 @@ def status_rows() -> list[dict[str, Any]]:
 
 
 def _admin_password_ok(password: str) -> bool:
-    settings = get_settings()
-    if settings.portal_admin_hash:
-        return bcrypt.checkpw(password.encode(), settings.portal_admin_hash.encode())
-    plain = settings.admin_password.get_secret_value() if settings.admin_password else None
-    return bool(plain) and password == plain
+    from web.auth import passwords_match
+
+    return passwords_match(password)
 
 
-async def handle_keys_page(_request: web.Request) -> web.Response:
+async def handle_keys_page(request: web.Request) -> web.Response:
+    _require_admin(request)
     from web.portal_shell import head_snippet
 
     # shared portal header + palette (PLAN_V2 V5-1) so /keys is not a dead end
