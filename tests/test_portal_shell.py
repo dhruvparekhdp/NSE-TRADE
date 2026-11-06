@@ -20,6 +20,7 @@ NODE = shutil.which("node")
 
 @pytest.fixture
 async def client(monkeypatch, tmp_path):
+    monkeypatch.setenv("ADMIN_PASSWORD", "test-pass")
     monkeypatch.setenv("SESSION_SECRET", "unit-test-session-secret")
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
@@ -79,6 +80,7 @@ async def test_api_is_reachable_under_the_base_path_and_typos_are_404(client):
 
 
 async def test_keys_page_carries_the_portal_header(client):
+    assert (await client.post("/api/login", json={"password": "test-pass"})).status == 200
     body = await (await client.get("/keys")).text()
     assert "portal/static/chrome.js" in body
     assert "portal/static/nav.js" in body

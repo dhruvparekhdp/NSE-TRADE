@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     portal_admin_hash: str | None = None
     session_secret: SecretStr | None = None
+    # Optional API token. Sent as "Authorization: Bearer". Empty means cookie login only.
+    admin_token: SecretStr | None = None
 
     mode: Literal["paper", "live"] = "paper"
     live_orders: bool = False
@@ -89,6 +91,8 @@ class Settings(BaseSettings):
     expected_static_ip: str | None = None
     # Bind loopback by default (PLAN_V2 V0-2 / B24). Nginx or Tailscale publishes the portal.
     web_host: str = "127.0.0.1"
+    # Must be true before web_host may be anything other than loopback (docs/remote-access.md).
+    expose_http: bool = False
     web_port: int = 8090
     cookie_secure: bool = True  # false only for local plain-HTTP dev / pytest
     data_dir: Path = Path("./var")  # runtime only; Python package `data/` is separate
@@ -142,6 +146,28 @@ class Settings(BaseSettings):
 
 _runtime_overrides: dict[str, Any] = {}
 _db_path: Path | None = None
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+class PublicBindRefused(RuntimeError):
+    """web_host is not loopback and EXPOSE_HTTP is not set.
+
+    The engine must not listen on a public interface by accident (docs/remote-access.md).
+    """
+
+
+def resolve_bind_host(settings: Settings | None = None) -> str:
+    """Host the HTTP server may bind. Loopback always; anything else needs EXPOSE_HTTP."""
+    settings = settings or get_settings()
+    host = (settings.web_host or "127.0.0.1").strip() or "127.0.0.1"
+    if host in _LOOPBACK_HOSTS:
+        return host
+    if settings.expose_http:
+        return host
+    raise PublicBindRefused(
+        f"refusing to bind {host}: set EXPOSE_HTTP=true to listen beyond localhost"
+    )
 
 
 def reset_settings_cache() -> None:
