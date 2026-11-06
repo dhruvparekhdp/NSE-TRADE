@@ -1,0 +1,14 @@
+title = "nse-engine"
+
+[extend]
+useDefault = true
+
+# Working-tree scans must not walk git objects, the local venv, or the
+# downloaded gitleaks binary. History scanning is a separate CI step.
+[allowlist]
+description = "Skip VCS metadata and local tooling"
+paths = [
+  '''(?:^|/)\.git(?:/|$)''',
+  '''(?:^|/)\.venv(?:/|$)''',
+  '''(?:^|/)tools(?:/|$)''',
+]

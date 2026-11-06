@@ -7,11 +7,15 @@ Read `AGENTS.md` and `docs/PLAN.md` first. News/foreign sentiment: `docs/DECISIO
 
 ## Setup
 
+Python 3.12. One command creates the venv and installs the pinned requirements.
+`make check` lints, typechecks, and runs the offline test suite. It does not
+log in to Angel. `scripts/login_check.py` is a manual read-only check after
+you fill `.env` locally.
+
 ```bash
-uv venv --python 3.12 .venv && source .venv/bin/activate
-uv pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env   # fill Angel / Telegram locally — never commit
-pytest -q && ruff check .
+make setup
+cp .env.example .env   # names only in git; fill Angel / Telegram locally — never commit
+make check             # ruff, mypy, pytest, pip-audit
 ```
 
 ## Evening backtest (after you add Angel keys)
