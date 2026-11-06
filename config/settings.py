@@ -41,6 +41,9 @@ class Settings(BaseSettings):
 
     mode: Literal["paper", "live"] = "paper"
     live_orders: bool = False
+    # NSE-004: both absent by default. Live sends need these AND mode/live_orders.
+    live_orders_enabled: bool = False  # env LIVE_ORDERS_ENABLED
+    live_orders_confirm: bool = False  # env LIVE_ORDERS_CONFIRM
     kill_switch: bool = False
 
     books_enabled: list[str] = Field(default_factory=lambda: ["A", "B"])
@@ -121,7 +124,7 @@ class Settings(BaseSettings):
     llm_log_calls: bool = True
     ai_news_review_enabled: bool = False  # optional Groq pass over flagged headlines
 
-    @field_validator("live_orders", mode="after")
+    @field_validator("live_orders", "live_orders_enabled", "live_orders_confirm", mode="after")
     @classmethod
     def _never_live_under_pytest(cls, v: bool) -> bool:
         if _force_paper():

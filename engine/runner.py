@@ -1,4 +1,9 @@
-"""APScheduler wiring + graceful shutdown (plan A12 / P0-7). Jobs are stubs in P0."""
+"""APScheduler wiring + graceful shutdown (plan A12 / P0-7).
+
+Market refresh, signal generation, MIS square-off, and the end-of-day snapshot
+run in paper/shadow and never call broker order methods. Login, the feed, and
+backup are still stubs.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from broker.live_guard import startup_banner
 from config.settings import get_settings
 from data.calendar import CalendarMissing, job_should_run, load_default_calendar
 from engine.state import init_db
@@ -21,6 +27,12 @@ from web.app import create_app
 
 log = logging.getLogger(__name__)
 IST = "Asia/Kolkata"
+
+
+def _clock_ms(now_ms: int | None) -> int:
+    if now_ms is not None:
+        return int(now_ms)
+    return int(datetime.now(ZoneInfo(IST)).timestamp() * 1000)
 
 
 class EngineRunner:
@@ -51,10 +63,25 @@ class EngineRunner:
                 return False
         return True
 
-    async def job_refresh_instruments(self) -> None:
-        if not self._trading_day_ok():
-            return
-        log.info("stub job: refresh instruments (08:30 IST)")
+    async def job_refresh_instruments(self, *, now_ms: int | None = None) -> dict | None:
+        """Persist the local quote cache. Does not download the scrip master or Yahoo."""
+        from data.free_quotes import read_quotes_cache
+        from engine.scheduled_jobs import refresh_market_data
+
+        ms = _clock_ms(now_ms)
+        try:
+            cache = read_quotes_cache(self.data_dir)
+            result = await asyncio.to_thread(
+                refresh_market_data,
+                self.db,
+                now_ms=ms,
+                quotes=list(cache.get("quotes") or []),
+            )
+            log.info("job: market data refresh %s", result.get("status"))
+            return result
+        except Exception as exc:  # noqa: BLE001 — a quote job must not stop the scheduler
+            log.warning("market data refresh failed: %s", exc)
+            return None
 
     async def job_login(self) -> None:
         if not self._trading_day_ok():
@@ -71,20 +98,68 @@ class EngineRunner:
             return
         log.info("stub job: no new Book A entries (14:45 IST)")
 
-    async def job_square_off(self) -> None:
-        if not self._trading_day_ok():
-            return
-        log.info("stub job: square off MIS (15:05 IST)")
+    async def job_generate_signals(self, *, now_ms: int | None = None) -> dict | None:
+        """Scan strategies into the local book. Shadow writes signals; paper writes virtual shares."""
+        from engine.scheduled_jobs import generate_signals
+
+        ms = _clock_ms(now_ms)
+        try:
+            result = await asyncio.to_thread(
+                generate_signals,
+                self.db,
+                now_ms=ms,
+                book_a_mode=self.settings.book_a_mode,
+                enabled=list(self.settings.strategies_enabled or []),
+                allow_special=bool(self.settings.trade_special_sessions),
+                no_entry_after=self.settings.no_entry_after,
+                square_off_at=self.settings.square_off_at,
+            )
+            log.info("job: signals %s", result.get("status"))
+            return result
+        except Exception as exc:  # noqa: BLE001
+            log.warning("signal generation failed: %s", exc)
+            return None
+
+    async def job_square_off(self, *, now_ms: int | None = None) -> dict | None:
+        """Square off paper MIS at settings.square_off_at, which must be before 15:30 IST."""
+        from engine.scheduled_jobs import square_off_mis
+
+        ms = _clock_ms(now_ms)
+        try:
+            result = await asyncio.to_thread(
+                square_off_mis,
+                self.db,
+                now_ms=ms,
+                square_off_at=self.settings.square_off_at,
+            )
+            log.info("job: square off %s", result.get("status"))
+            return result
+        except Exception as exc:  # noqa: BLE001
+            log.warning("square off failed: %s", exc)
+            return None
 
     async def job_stop_feed(self) -> None:
         if not self._trading_day_ok():
             return
         log.info("stub job: stop websocket (15:35 IST)")
 
-    async def job_eod(self) -> None:
-        if not self._trading_day_ok():
-            return
-        log.info("stub job: end-of-day summary (15:45 IST)")
+    async def job_eod(self, *, now_ms: int | None = None) -> dict | None:
+        """Write the paper performance snapshot after the cash close."""
+        from engine.scheduled_jobs import snapshot_performance
+
+        ms = _clock_ms(now_ms)
+        try:
+            result = await asyncio.to_thread(
+                snapshot_performance,
+                self.db,
+                now_ms=ms,
+                start_inr=float(self.settings.capital_inr),
+            )
+            log.info("job: eod snapshot %s", result.get("status"))
+            return result
+        except Exception as exc:  # noqa: BLE001
+            log.warning("eod snapshot failed: %s", exc)
+            return None
 
     async def job_backfill(self) -> None:
         if not self._trading_day_ok():
@@ -128,14 +203,25 @@ class EngineRunner:
         except Exception as exc:  # noqa: BLE001
             log.warning("free quotes job failed: %s", exc)
 
+    def _square_off_cron(self) -> str:
+        """settings.square_off_at, or 14:55 if that clock is not before 15:30 IST."""
+        from engine.scheduled_jobs import cron_at
+
+        try:
+            return cron_at(self.settings.square_off_at)
+        except ValueError:
+            log.warning("square_off_at %s is not before 15:30 IST; using 14:55", self.settings.square_off_at)
+            return cron_at("14:55")
+
     def _schedule(self) -> None:
-        # Trading-day filter is applied inside jobs later; P0 only registers the clock times.
+        # Holiday and session checks live inside the jobs (IST calendar, not the host clock).
         jobs = [
             ("30 8 * * mon-fri", self.job_refresh_instruments, "refresh_instruments"),
             ("45 8 * * mon-fri", self.job_login, "login"),
             ("0 9 * * mon-fri", self.job_start_feed, "start_feed"),
+            ("*/15 9-15 * * mon-fri", self.job_generate_signals, "generate_signals"),
             ("45 14 * * mon-fri", self.job_no_new_entries, "no_new_entries"),
-            ("5 15 * * mon-fri", self.job_square_off, "square_off"),
+            (self._square_off_cron(), self.job_square_off, "square_off"),
             ("35 15 * * mon-fri", self.job_stop_feed, "stop_feed"),
             ("45 15 * * mon-fri", self.job_eod, "eod"),
             ("0 18 * * mon-fri", self.job_backfill, "backfill"),
@@ -167,9 +253,8 @@ class EngineRunner:
         site = web.TCPSite(self._runner, self.settings.web_host, self.settings.web_port)
         await site.start()
         log.info(
-            "nse-engine listening on http://%s:%s status=%s",
-            self.settings.web_host,
-            self.settings.web_port,
+            "%s status=%s",
+            startup_banner(self.settings),
             "ok" if self.settings.angel_configured else "not configured",
         )
 
