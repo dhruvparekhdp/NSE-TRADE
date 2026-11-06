@@ -78,8 +78,10 @@ def apply_ip_headers(api: Any) -> dict[str, str]:
 def build_smart_connect() -> Any:
     from SmartApi import SmartConnect
 
-    settings = get_settings()
-    key = settings.angel_api_key.get_secret_value() if settings.angel_api_key else ""
-    api = SmartConnect(key)
+    from config.broker_secrets import load_broker_secrets
+
+    # Raises before the SDK is constructed when the key, code, MPIN or TOTP seed is missing.
+    secrets = load_broker_secrets()
+    api = SmartConnect(secrets.api_key)
     apply_ip_headers(api)
     return api

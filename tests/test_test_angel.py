@@ -59,7 +59,8 @@ def _angel_env(monkeypatch, tmp_path) -> str:
     monkeypatch.setenv("ANGEL_API_KEY", "k")
     monkeypatch.setenv("ANGEL_CLIENT_CODE", "D1234")
     monkeypatch.setenv("ANGEL_PIN", "1234")
-    monkeypatch.setenv("ANGEL_TOTP_SECRET", "JBSWY3DPEHPK3PXP")
+    # Placeholder base32 for the test double. Not an Angel credential.
+    monkeypatch.setenv("ANGEL_TOTP_SECRET", "A" * 16)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     reset_settings_cache()
     return password

@@ -154,6 +154,10 @@ def reset_settings_cache() -> None:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    # Arm log redaction on the first settings load so every entry point is covered (NSE-003).
+    from config.log_redact import install_log_redaction
+
+    install_log_redaction()
     return Settings()
 
 
