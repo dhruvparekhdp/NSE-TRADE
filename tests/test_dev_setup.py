@@ -94,6 +94,36 @@ def test_env_example_is_names_only_and_keeps_paper_defaults(monkeypatch):
     assert not settings.angel_configured
 
 
+def test_ci_runs_offline_on_push_and_pr_and_does_not_log_in():
+    text = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert re.search(r"^on:\s*$", text, re.M)
+    assert re.search(r"^  push:\s*$", text, re.M)
+    assert re.search(r"^  pull_request:\s*$", text, re.M)
+    assert "branches:" not in text
+    assert "fetch-depth: 0" in text
+    assert "NSE_FORCE_PAPER" in text
+    assert 'LIVE_ORDERS: "false"' in text
+    assert "true" not in text.split("LIVE_ORDERS", 1)[1].splitlines()[0]
+    for step in ("make lint", "make typecheck", "make test", "make audit", "make secrets"):
+        assert step in text
+    lowered = text.lower()
+    for banned in ("login_check", "generatesession", "smartconnect", "placeorder"):
+        assert banned not in lowered
+    lines = text.splitlines()
+    tree_at = next(i for i, line in enumerate(lines) if "gitleaks working tree" in line)
+    hist_at = next(i for i, line in enumerate(lines) if "gitleaks history" in line)
+    assert hist_at > tree_at
+    assert "continue-on-error" not in "\n".join(lines[tree_at:hist_at])
+    assert "continue-on-error: true" in "\n".join(lines[hist_at : hist_at + 6])
+
+
+def test_gitleaks_installer_checks_a_pinned_checksum():
+    text = (ROOT / "scripts/install_gitleaks.sh").read_text()
+    assert 'VERSION="8.30.1"' in text
+    assert "sha256sum -c" in text
+    assert "LINUX_X64_SHA256" in text
+
+
 def test_pip_audit_baseline_is_an_explicit_id_list():
     lines = [
         line.strip()
